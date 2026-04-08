@@ -1,0 +1,42 @@
+# Exclude local configs/secrets (NOT example.env - it's a template!)
+.env
+.env.deploy
+.env.local
+*.env.local
+CREDENTIALS.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+__pycache_ и. ]_/
+
+# Virtual environments
+venv/
+.venv/
+
+# Logs and runtime artifacts
+*.log
+bot.log
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.code-workspace 
+# User data
+users.json
+conversation_history.json
+app_keys.json
+mtproto_config.json
+hysteria2_config.json
+vless_config.json
+headscale_config.json
+vless_configs/
+
+# Keep the public repo lightweight: most reference docs stay in TelegramSimple
+*.md
+!README.md
+!INSTALL_VPS.md

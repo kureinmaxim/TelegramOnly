@@ -1,0 +1,58 @@
+{
+  "format": "apix-profile",
+  "version": 2,
+  "source": {
+    "app": "TelegramSimple",
+    "exported_at": "2026-04-08T12:00:00Z"
+  },
+  "profile": {
+    "id": "telegram-only-reality",
+    "name": "TelegramOnly Reality",
+    "icon": "TG",
+    "color": "#6366f1",
+    "protocol_type": "reality",
+    "is_default": false
+  },
+  "server": {
+    "host": "198.51.100.10",
+    "port": 443
+  },
+  "vpn_mode": "auto",
+  "reality": {
+    "enabled": true,
+    "uuid": "11111111-1111-4111-8111-111111111111",
+    "public_key": "PUBLIC_KEY_PLACEHOLDER",
+    "short_id": "abcd1234",
+    "sni": "www.microsoft.com",
+    "fingerprint": "chrome",
+    "flow": "xtls-rprx-vision",
+    "network": "tcp"
+  },
+  "hysteria2": null,
+  "routing_policy": {
+    "enabled": true,
+    "mode": "telegram_only",
+    "transport_candidates": [
+      "reality"
+    ],
+    "client_targets": [
+      "apixgrpc",
+      "sing-box",
+      "clash-meta"
+    ],
+    "fallback_transport": "mtproto",
+    "fail_mode": "fail_open",
+    "telegram_domains": [
+      "telegram.org",
+      "t.me",
+      "telegram.me",
+      "telegra.ph",
+      "tdesktop.com"
+    ],
+    "telegram_ip_cidrs": []
+  },
+  "meta": {
+    "subscription_name": "TelegramOnly-Reality",
+    "server_label": "reality-primary"
+  }
+}

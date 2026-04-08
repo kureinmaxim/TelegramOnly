@@ -1,0 +1,42 @@
+services:
+  # TelegramSimple LITE — бот с VLESS-Reality + Hysteria2
+  telegram-helper:
+    container_name: telegram-helper-lite
+    image: telegram-helper-lite:latest
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    dns_search:
+      - .
+    volumes:
+      - ./bot.log:/app/bot.log
+      - ./users.json:/app/users.json
+      - ./.env:/app/.env
+      - ./app_keys.json:/app/app_keys.json
+      - ./vless_config.json:/app/vless_config.json
+      - ./hysteria2_config.json:/app/hysteria2_config.json
+      - ./mtproto_config.json:/app/mtproto_config.json
+      - ./headscale_config.json:/app/headscale_config.json
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # Dockhand - Diagnostics Panel
+  dockhand:
+    container_name: dockhand
+    build:
+      context: ./dockhand
+    ports:
+      - "127.0.0.1:8501:8501"
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - telegram-helper
+    dns:
+      - 8.8.8.8 # Google DNS
+      - 1.1.1.1 # Cloudflare DNS

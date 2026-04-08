@@ -1,0 +1,58 @@
+{
+  "format": "apix-profile",
+  "version": 2,
+  "source": {
+    "app": "TelegramSimple",
+    "exported_at": "2026-04-08T12:00:00Z"
+  },
+  "profile": {
+    "id": "telegram-only-hysteria2",
+    "name": "TelegramOnly Hysteria2",
+    "icon": "TG",
+    "color": "#10b981",
+    "protocol_type": "hysteria2",
+    "is_default": false
+  },
+  "server": {
+    "host": "198.51.100.11",
+    "port": 443
+  },
+  "vpn_mode": "auto",
+  "reality": null,
+  "hysteria2": {
+    "enabled": true,
+    "password": "HY2_PASSWORD_PLACEHOLDER",
+    "sni": "www.apple.com",
+    "insecure": false,
+    "up_mbps": 0,
+    "down_mbps": 0,
+    "obfs_type": "salamander",
+    "obfs_password": "HY2_OBFS_PLACEHOLDER"
+  },
+  "routing_policy": {
+    "enabled": true,
+    "mode": "telegram_only",
+    "transport_candidates": [
+      "hysteria2"
+    ],
+    "client_targets": [
+      "apixgrpc",
+      "sing-box",
+      "clash-meta"
+    ],
+    "fallback_transport": "mtproto",
+    "fail_mode": "fail_open",
+    "telegram_domains": [
+      "telegram.org",
+      "t.me",
+      "telegram.me",
+      "telegra.ph",
+      "tdesktop.com"
+    ],
+    "telegram_ip_cidrs": []
+  },
+  "meta": {
+    "subscription_name": "TelegramOnly-Hysteria2",
+    "server_label": "hy2-primary"
+  }
+}

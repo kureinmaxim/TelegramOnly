@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local envs
+venv/
+.env
+.env.*
+CREDENTIALS.txt
+app_keys.json
+users.json
+vless_config.json
+hysteria2_config.json
+mtproto_config.json
+headscale_config.json
+conversation_history.json
+
+# VCS
+.git/
+.gitignore
+
+# OS
+.DS_Store
+
+# Logs and runtime artifacts
+*.log
+bot.log
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+
+# Project docs (avoid baking internal notes into the image)
+docs/

@@ -1,0 +1,20 @@
+# Python 3.11+
+python-telegram-bot>=22.1,<23.0
+qrcode[pil]
+deep-translator>=1.11.0
+requests>=2.31.0
+langid>=1.1.6
+beautifulsoup4>=4.12.0
+openai>=1.16.0
+anthropic>=0.25.0
+httpx>=0.27.0,<0.28.0
+python-dotenv>=1.0.0
+aiofiles>=23.0.0
+
+# Устойчивый провайдер поиска для /factcheck
+ddgs>=1.0.0
+
+# API Server
+fastapi>=0.109.0
+uvicorn>=0.27.0
+cryptography>=42.0.0 

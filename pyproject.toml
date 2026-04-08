@@ -1,0 +1,15 @@
+[project]
+name = "telegram-helper"
+version = "3.6.0"
+description = "Telegram echo bot with basic commands"
+requires-python = ">=3.11"
+dependencies = [
+    "python-telegram-bot>=22.1",
+    "qrcode[pil]",
+]
+
+# Tool-specific metadata for the project
+[tool.telegramhelper.metadata]
+release_date = "07.04.2026"
+developer = "Куреин М Н"
+last_updated = "2026-04-07"
