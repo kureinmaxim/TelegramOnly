@@ -134,6 +134,13 @@ def list_app_ids_from_data(data: dict = None):
     return list(app_keys.keys())
 
 
+def allow_full_secret_output() -> bool:
+    """Разрешён ли явный full reveal из локального CLI."""
+    return os.getenv("TELEGRAMONLY_ALLOW_SECRET_REVEAL", "").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+
+
 def print_key_info(app_id: str = None, show_full: bool = False, data: dict = None):
     """Вывести информацию о ключах для app_id"""
     
@@ -176,9 +183,8 @@ def print_key_info(app_id: str = None, show_full: bool = False, data: dict = Non
         if show_full:
             print(f"🔐 API Key: {api_key}")
         else:
-            masked = api_key[:8] + "..." + api_key[-8:] if len(api_key) > 16 else api_key
+            masked = api_key[:8] + "..." + api_key[-8:] if len(api_key) > 16 else "***"
             print(f"🔐 API Key: {masked}")
-            print(f"   Полный ключ: {api_key}")
     else:
         print(f"🔐 API Key: ❌ Не установлен")
     
@@ -187,9 +193,8 @@ def print_key_info(app_id: str = None, show_full: bool = False, data: dict = Non
         if show_full:
             print(f"🔒 Encryption Key: {enc_key}")
         else:
-            masked = enc_key[:8] + "..." + enc_key[-8:] if len(enc_key) > 16 else enc_key
+            masked = enc_key[:8] + "..." + enc_key[-8:] if len(enc_key) > 16 else "***"
             print(f"🔒 Encryption Key: {masked}")
-            print(f"   Полный ключ: {enc_key}")
     else:
         print(f"🔒 Encryption Key: ❌ Не установлен")
     
@@ -228,6 +233,11 @@ def main():
     )
     
     args = parser.parse_args()
+
+    if args.full and not allow_full_secret_output():
+        print("⛔ Полный вывод секретов отключён по умолчанию.")
+        print("Временно включите `TELEGRAMONLY_ALLOW_SECRET_REVEAL=true` только на локальном сервере, если это действительно нужно.")
+        sys.exit(1)
     
     print("=" * 60)
     print("🔍 Просмотр активных API ключей")

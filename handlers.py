@@ -68,6 +68,20 @@ class BotHandlersLite:
             return False
         return self.config.is_admin(user_id)
 
+    def _secret_reveal_allowed(self) -> bool:
+        """Разрешён ли полный вывод секретов через удалённые каналы."""
+        return os.getenv("TELEGRAMONLY_ALLOW_SECRET_REVEAL", "").strip().lower() in {
+            "1", "true", "yes", "on"
+        }
+
+    def _mask_secret(self, value: str) -> str:
+        """Вернуть безопасное маскированное представление секрета."""
+        if not value:
+            return "***"
+        if len(value) <= 12:
+            return "***"
+        return f"{value[:8]}...{value[-4:]}"
+
     async def _reply_vless_qr(self, message, name_or_uuid: str):
         """Отправить QR и ссылку для VLESS-клиента."""
         success, response, payload = vless_manager.build_client_qr_payload(name_or_uuid)
@@ -283,10 +297,10 @@ class BotHandlersLite:
 
 *🔧 Система и информация \\(админ\\):*
 /ver \\- Информация о версии
-/api \\- Показать API ключ
+/api \\- Показать маскированный API ключ
 /gen\\_api\\_key \\- Сгенерировать API ключ
 /del\\_api\\_key \\- Удалить API ключ
-/encryption\\_key \\- Показать ключ шифрования
+/encryption\\_key \\- Показать маскированный ключ шифрования
 /gen\\_encryption\\_key \\- Сгенерировать ключ шифрования
 /del\\_encryption\\_key \\- Удалить ключ шифрования
 /gen\\_chacha\\_key \\- Сгенерировать ключ ChaCha20
@@ -473,7 +487,7 @@ _SSH команды:_
             await update.message.reply_text("Ошибка при получении информации о версии.")
     
     async def api_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /api - показать API ключ."""
+        """Команда /api - показать маскированный API ключ."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
@@ -504,7 +518,7 @@ _SSH команды:_
             except ImportError:
                 # Если модуль security не найден, показываем дефолтный ключ
                 api_key = os.getenv("API_SECRET_KEY", "не настроен")
-                masked = f"{api_key[:8]}...{api_key[-4:]}" if len(api_key) > 12 else "***"
+                masked = self._mask_secret(api_key)
                 await update.message.reply_text(f"🔑 API ключ: `{masked}`", parse_mode=ParseMode.MARKDOWN_V2)
                 
         except Exception as e:
@@ -542,11 +556,9 @@ _SSH команды:_
                     reply_markup=reply_markup
                 )
             except ImportError:
-                # Генерируем напрямую
-                new_key = secrets.token_hex(32)
                 await update.message.reply_text(
-                    f"✅ Новый API ключ сгенерирован:\n\n`{new_key}`\n\n⚠️ Добавьте его в .env как API_SECRET_KEY",
-                    parse_mode=ParseMode.MARKDOWN_V2
+                    "⚠️ Безопасный режим не показывает новый API ключ в Telegram.\n"
+                    "Сгенерируйте и сохраните его локально на сервере, затем обновите `API_SECRET_KEY` в `.env`."
                 )
                 
         except Exception as e:
@@ -591,7 +603,7 @@ _SSH команды:_
             await update.message.reply_text("Ошибка при удалении API ключа.")
     
     async def encryption_key_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /encryption_key - показать ключ шифрования."""
+        """Команда /encryption_key - показать маскированный ключ шифрования."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
@@ -621,7 +633,7 @@ _SSH команды:_
                 )
             except ImportError:
                 enc_key = os.getenv("ENCRYPTION_KEY", "не настроен")
-                masked = f"{enc_key[:8]}...{enc_key[-4:]}" if len(enc_key) > 12 else "***"
+                masked = self._mask_secret(enc_key)
                 await update.message.reply_text(f"🔐 Ключ шифрования: `{masked}`", parse_mode=ParseMode.MARKDOWN_V2)
                 
         except Exception as e:
@@ -659,10 +671,9 @@ _SSH команды:_
                     reply_markup=reply_markup
                 )
             except ImportError:
-                new_key = secrets.token_hex(32)
                 await update.message.reply_text(
-                    f"✅ Новый ключ шифрования сгенерирован:\n\n`{new_key}`\n\n⚠️ Добавьте его в .env как ENCRYPTION_KEY",
-                    parse_mode=ParseMode.MARKDOWN_V2
+                    "⚠️ Безопасный режим не показывает новый ключ шифрования в Telegram.\n"
+                    "Сгенерируйте и сохраните его локально на сервере, затем обновите `ENCRYPTION_KEY` в `.env`."
                 )
                 
         except Exception as e:
@@ -1349,14 +1360,11 @@ _Обновлено: {updated_at}_"""
 *Public Key:*
 `{keys.get("public_key", "")}`
 
-*Private Key:*
-`{keys.get("private_key", "")}`
-
 *Short ID:*
 `{keys.get("short_id", "")}`
 
 ⚠️ *Важно:*
-• Private Key используется только на СЕРВЕРЕ
+• Private Key сохранён только на сервере и не отправляется в Telegram
 • Public Key и Short ID нужны для клиента
 • UUID должен совпадать на сервере и клиенте"""
                 
@@ -2368,13 +2376,15 @@ systemctl status xray
                     source = "дефолтный"
             
             if api_key:
-                masked = f"{api_key[:8]}\\.\\.\\. {api_key[-4:]}" if len(api_key) > 12 else api_key
+                masked = self._mask_secret(api_key).replace(".", "\\.")
                 message = f"🔑 API ключ \\({source}\\):\n\n`{masked}`"
-                
-                # Кнопка "Показать полностью"
-                keyboard = [[InlineKeyboardButton("👁️ Показать полностью", callback_data=f"show_full_api_key:{app_id}")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await update.callback_query.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=reply_markup)
+                if self._secret_reveal_allowed():
+                    keyboard = [[InlineKeyboardButton("👁️ Показать полностью", callback_data=f"show_full_api_key:{app_id}")]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await update.callback_query.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=reply_markup)
+                else:
+                    message += "\n\n⚠️ Полный вывод секретов через Telegram отключён по умолчанию\\."
+                    await update.callback_query.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
             else:
                 app_id_escaped = escape_markdown(app_id)
                 message = f"❌ API ключ не найден для {app_id_escaped}"
@@ -2386,6 +2396,13 @@ systemctl status xray
     async def _show_full_api_key(self, update: Update, app_id: str):
         """Показать полный API ключ для app_id."""
         try:
+            if not self._secret_reveal_allowed():
+                await update.callback_query.message.reply_text(
+                    "⛔ Полный вывод API ключей через Telegram отключён. "
+                    "Если это действительно нужно, включите `TELEGRAMONLY_ALLOW_SECRET_REVEAL=true` только временно на сервере."
+                )
+                return
+
             from app_keys import get_api_key, has_api_key
             
             if app_id == "default":
@@ -2438,13 +2455,15 @@ systemctl status xray
                     source = "дефолтный"
             
             if enc_key:
-                masked = f"{enc_key[:8]}\\.\\.\\. {enc_key[-4:]}" if len(enc_key) > 12 else enc_key
+                masked = self._mask_secret(enc_key).replace(".", "\\.")
                 message = f"🔐 Ключ шифрования \\({source}\\):\n\n`{masked}`"
-                
-                # Кнопка "Показать полностью"
-                keyboard = [[InlineKeyboardButton("👁️ Показать полностью", callback_data=f"show_full_enc_key:{app_id}")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await update.callback_query.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=reply_markup)
+                if self._secret_reveal_allowed():
+                    keyboard = [[InlineKeyboardButton("👁️ Показать полностью", callback_data=f"show_full_enc_key:{app_id}")]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await update.callback_query.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=reply_markup)
+                else:
+                    message += "\n\n⚠️ Полный вывод секретов через Telegram отключён по умолчанию\\."
+                    await update.callback_query.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
             else:
                 app_id_escaped = escape_markdown(app_id)
                 message = f"❌ Ключ шифрования не найден для {app_id_escaped}"
@@ -2456,6 +2475,13 @@ systemctl status xray
     async def _show_full_encryption_key(self, update: Update, app_id: str):
         """Показать полный ключ шифрования для app_id."""
         try:
+            if not self._secret_reveal_allowed():
+                await update.callback_query.message.reply_text(
+                    "⛔ Полный вывод ключей шифрования через Telegram отключён. "
+                    "Если это действительно нужно, включите `TELEGRAMONLY_ALLOW_SECRET_REVEAL=true` только временно на сервере."
+                )
+                return
+
             from app_keys import get_encryption_key, has_encryption_key
             
             if app_id == "default":
@@ -2486,6 +2512,13 @@ systemctl status xray
             new_key = secrets.token_hex(32)
             
             if app_id == "default":
+                if not self._secret_reveal_allowed():
+                    await update.callback_query.message.reply_text(
+                        "⛔ Генерация дефолтного API ключа через Telegram отключена в безопасном режиме.\n"
+                        "Сгенерируйте ключ локально на сервере и обновите `API_SECRET_KEY` в `.env`."
+                    )
+                    return
+
                 message = f"""✅ Новый API ключ сгенерирован:
 
 `{new_key}`
@@ -2496,12 +2529,21 @@ systemctl status xray
                 from app_keys import set_api_key
                 set_api_key(app_id, new_key)
                 app_id_escaped = escape_markdown(app_id)
-                message = f"""✅ API ключ для {app_id_escaped} сгенерирован и сохранён:
+                masked = self._mask_secret(new_key).replace(".", "\\.")
+                if self._secret_reveal_allowed():
+                    message = f"""✅ API ключ для {app_id_escaped} сгенерирован и сохранён:
 
 `{new_key}`
 
 💾 Сохранено в app\\_keys\\.json
 🔄 Изменения применятся при следующем запросе"""
+                else:
+                    message = f"""✅ API ключ для {app_id_escaped} сгенерирован и сохранён:
+
+`{masked}`
+
+⚠️ Полный секрет не отправляется через Telegram
+💾 Сохранено в app\\_keys\\.json"""
             
             await update.callback_query.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:
@@ -2514,6 +2556,13 @@ systemctl status xray
             new_key = secrets.token_hex(32)
             
             if app_id == "default":
+                if not self._secret_reveal_allowed():
+                    await update.callback_query.message.reply_text(
+                        "⛔ Генерация дефолтного ключа шифрования через Telegram отключена в безопасном режиме.\n"
+                        "Сгенерируйте ключ локально на сервере и обновите `ENCRYPTION_KEY` в `.env`."
+                    )
+                    return
+
                 message = f"""✅ Новый ключ шифрования сгенерирован:
 
 `{new_key}`
@@ -2524,12 +2573,21 @@ systemctl status xray
                 from app_keys import set_encryption_key
                 set_encryption_key(app_id, new_key)
                 app_id_escaped = escape_markdown(app_id)
-                message = f"""✅ Ключ шифрования для {app_id_escaped} сгенерирован и сохранён:
+                masked = self._mask_secret(new_key).replace(".", "\\.")
+                if self._secret_reveal_allowed():
+                    message = f"""✅ Ключ шифрования для {app_id_escaped} сгенерирован и сохранён:
 
 `{new_key}`
 
 💾 Сохранено в app\\_keys\\.json
 🔄 Изменения применятся при следующем запросе"""
+                else:
+                    message = f"""✅ Ключ шифрования для {app_id_escaped} сгенерирован и сохранён:
+
+`{masked}`
+
+⚠️ Полный секрет не отправляется через Telegram
+💾 Сохранено в app\\_keys\\.json"""
             
             await update.callback_query.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:

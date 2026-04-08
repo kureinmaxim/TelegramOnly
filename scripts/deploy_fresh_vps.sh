@@ -14,6 +14,7 @@
 # ═══════════════════════════════════════════════════════════════
 
 set -e
+umask 077
 
 SERVER_IP="${SERVER_IP:-YOUR_SERVER_IP}"
 SSH_PORT="22542"        # Change if custom
@@ -367,4 +368,4 @@ echo ""
 echo "  # 4. Запустите Docker (на сервере):"
 echo "  ssh -p $SSH_PORT root@$SERVER_IP 'cd $PROJECT_DIR && docker compose up -d telegram-helper'"
 echo ""
-cat $PROJECT_DIR/CREDENTIALS.txt
+echo "  Просмотрите файл локально на сервере: sudo less $PROJECT_DIR/CREDENTIALS.txt"

@@ -22,6 +22,15 @@ from utils import get_app_version, escape_markdown
 logger = logging.getLogger(__name__)
 
 
+def _mask_secret(value: str) -> str:
+    """Return a masked secret for remote/admin output."""
+    if not value:
+        return "***"
+    if len(value) <= 12:
+        return "***"
+    return f"{value[:8]}...{value[-4:]}"
+
+
 class AdminCLI:
     """Execute bot admin commands without Telegram."""
     
@@ -104,8 +113,8 @@ class AdminCLI:
 /vless_off - Disable VLESS
 
  Keys (apiai-v3):
-/api - Show API key (FULL)
-/encryption_key - Show encryption key (FULL)"""
+/api - Show masked API key
+/encryption_key - Show masked encryption key"""
     
     def _cmd_version(self, args: List[str]) -> str:
         """Show version info."""
@@ -539,7 +548,7 @@ Run manually: docker compose restart"""
             return f"❌ Error reading Xray config: {e}"
     
     def _cmd_api(self, args: List[str]) -> str:
-        """Show API key - FULL for apiai-v3."""
+        """Show masked API key for apiai-v3."""
         try:
             from app_keys import get_api_key
             
@@ -549,16 +558,16 @@ Run manually: docker compose restart"""
             if key:
                 return f"""🔑 API Key (apiai-v3)
 
-{key}
+{_mask_secret(key)}
 
-📋 Copy and paste into ApiXgRPC Settings"""
+⚠️ Full secret reveal is disabled in Admin CLI by default"""
             else:
                 # Fallback to default
                 default_key = os.getenv("API_SECRET_KEY", "")
                 if default_key:
                     return f"""🔑 API Key (default)
 
-{default_key}
+{_mask_secret(default_key)}
 
 ⚠️ apiai-v3 key not found, using default"""
                 else:
@@ -569,11 +578,11 @@ Run manually: docker compose restart"""
             if api_key:
                 return f"""🔑 API Key (default)
 
-{api_key}"""
+{_mask_secret(api_key)}"""
             return "❌ No API key configured"
     
     def _cmd_encryption_key(self, args: List[str]) -> str:
-        """Show encryption key - FULL for apiai-v3."""
+        """Show masked encryption key for apiai-v3."""
         try:
             from app_keys import get_encryption_key
             
@@ -583,16 +592,16 @@ Run manually: docker compose restart"""
             if key:
                 return f"""🔐 Encryption Key (apiai-v3)
 
-{key}
+{_mask_secret(key)}
 
-📋 Copy and paste into ApiXgRPC Settings"""
+⚠️ Full secret reveal is disabled in Admin CLI by default"""
             else:
                 # Fallback to default
                 default_key = os.getenv("ENCRYPTION_KEY", "")
                 if default_key:
                     return f"""🔐 Encryption Key (default)
 
-{default_key}
+{_mask_secret(default_key)}
 
 ⚠️ apiai-v3 key not found, using default"""
                 else:
@@ -603,7 +612,7 @@ Run manually: docker compose restart"""
             if enc_key:
                 return f"""🔐 Encryption Key (default)
 
-{enc_key}"""
+{_mask_secret(enc_key)}"""
             return "❌ No encryption key configured"
 
 

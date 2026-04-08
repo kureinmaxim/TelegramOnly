@@ -7,8 +7,20 @@ import json
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.chdir(PROJECT_DIR)
 
+
+def allow_full_secret_output() -> bool:
+    """Explicit opt-in for full secret output over SSH helper."""
+    return os.getenv("TELEGRAMONLY_ALLOW_SECRET_REVEAL", "").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+
 def show_keys(app_id: str = None, full: bool = False):
     """Show API keys for an app_id or all keys."""
+    if full and not allow_full_secret_output():
+        print("⛔ Full secret output is disabled by default.")
+        print("Temporarily set TELEGRAMONLY_ALLOW_SECRET_REVEAL=true on the server only if absolutely necessary.")
+        return
+
     keys_file = os.path.join(PROJECT_DIR, 'app_keys.json')
     
     if not os.path.exists(keys_file):

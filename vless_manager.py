@@ -793,7 +793,6 @@ def save_vless_config_files(output_dir: str = None) -> Tuple[bool, str, List[str
     port = config.get("port", 443)
     uuid = config.get("uuid", "")
     public_key = config.get("public_key", "")
-    private_key = config.get("private_key", "")
     short_id = config.get("short_id", "")
     sni = config.get("sni", "www.microsoft.com")
     fingerprint = config.get("fingerprint", "chrome")
@@ -822,12 +821,12 @@ def save_vless_config_files(output_dir: str = None) -> Tuple[bool, str, List[str
     
     # 1. Сохраняем JSON конфиг
     json_path = os.path.join(output_dir, f"vless_config_{safe_server}.json")
+    # WARNING: private_key must never be written into client-facing exports.
     json_config = {
         "server": server,
         "port": port,
         "uuid": uuid,
         "public_key": public_key,
-        "private_key": private_key,
         "short_id": short_id,
         "sni": sni,
         "fingerprint": fingerprint,

@@ -76,6 +76,7 @@ Recommended client flow:
 - `schema/apix-profile-v2.schema.json` - profile schema
 - `fixtures/*.apix.json` - reference exports
 - `INSTALL_VPS.md` - deployment guide
+- `ARCHITECTURE.md` - project architecture, stack, current features, and roadmap
 
 ## Compatibility
 

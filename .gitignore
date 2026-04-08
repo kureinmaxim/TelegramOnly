@@ -40,3 +40,4 @@ vless_configs/
 *.md
 !README.md
 !INSTALL_VPS.md
+!ARCHITECTURE.md

@@ -23,6 +23,7 @@
 # ═══════════════════════════════════════════════════════════════
 
 set -e
+umask 077
 
 # Цвета для вывода
 RED='\033[0;31m'
@@ -464,7 +465,7 @@ if [ -z "\$PRIVATE_KEY" ] || [ -z "\$PUBLIC_KEY" ]; then
 fi
 
 echo "UUID: \$UUID"
-echo "Private Key: \${PRIVATE_KEY:0:10}..."
+echo "Private Key: [hidden; stored on server only]"
 echo "Public Key: \${PUBLIC_KEY:0:10}..."
 
 SNI="www.microsoft.com"
@@ -680,7 +681,6 @@ cat > \$HOME_DIR/vless_client_config.json << EOF
   "port": \$PORT,
   "uuid": "\$UUID",
   "public_key": "\$PUBLIC_KEY",
-  "private_key": "\$PRIVATE_KEY",
   "short_id": "\$SHORT_ID",
   "sni": "\$SNI",
   "fingerprint": "\$FINGERPRINT",
@@ -804,7 +804,7 @@ if [ -z "\$PRIVATE_KEY" ] || [ -z "\$PUBLIC_KEY" ]; then
 fi
 
 echo "UUID: \$UUID"
-echo "Private Key: \${PRIVATE_KEY:0:10}..."
+echo "Private Key: [hidden; stored on server only]"
 echo "Public Key: \${PUBLIC_KEY:0:10}..."
 
 # Генерация ключей шифрования
@@ -1192,7 +1192,6 @@ cat > \$HOME_DIR/vless_client_config.json << EOF
   "port": \$PORT,
   "uuid": "\$UUID",
   "public_key": "\$PUBLIC_KEY",
-  "private_key": "\$PRIVATE_KEY",
   "short_id": "\$SHORT_ID",
   "sni": "\$SNI",
   "fingerprint": "\$FINGERPRINT",
