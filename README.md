@@ -77,6 +77,8 @@ Recommended client flow:
 - `fixtures/*.apix.json` - reference exports
 - `INSTALL_VPS.md` - deployment guide
 - `ARCHITECTURE.md` - project architecture, stack, current features, and roadmap
+- `SECURITY.md` - security policy and reporting guidance
+- `LICENSE` - MIT license for the public repository
 
 ## Compatibility
 
