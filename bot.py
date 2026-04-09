@@ -305,6 +305,25 @@ class TelegramBotLite:
             for cmd_name, handler_func in hy2_commands.items():
                 self.application.add_handler(CommandHandler(cmd_name, handler_func))
 
+            # === NAIVEPROXY COMMANDS ===
+            naive_commands = {
+                "naive_status": self.handlers.naive_status,
+                "naive_on": self.handlers.naive_on,
+                "naive_off": self.handlers.naive_off,
+                "naive_config": self.handlers.naive_config,
+                "naive_set_domain": self.handlers.naive_set_domain,
+                "naive_set_port": self.handlers.naive_set_port,
+                "naive_set_user": self.handlers.naive_set_user,
+                "naive_set_password": self.handlers.naive_set_password,
+                "naive_gen_creds": self.handlers.naive_gen_creds,
+                "naive_install": self.handlers.naive_install,
+                "naive_uri": self.handlers.naive_uri,
+                "naive_apply": self.handlers.naive_apply,
+                "naive_export": self.handlers.naive_export,
+            }
+            for cmd_name, handler_func in naive_commands.items():
+                self.application.add_handler(CommandHandler(cmd_name, handler_func))
+
             # === TELEGRAMONLY EXPORT COMMANDS ===
             self.application.add_handler(
                 CommandHandler("tgcapsule_export", self.handlers.tgcapsule_export)

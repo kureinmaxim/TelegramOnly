@@ -44,6 +44,7 @@ import vless_manager
 import hysteria2_manager
 import mtproto_manager
 import headscale_manager
+import naiveproxy_manager
 import telegram_capsule_export
 
 logger = logging.getLogger(__name__)
@@ -366,6 +367,21 @@ _SSH команды:_
 /hy2\\_restart \\- Перезапустить сервис
 /hy2\\_logs \\- Логи сервиса
 /hy2\\_export \\- Экспорт конфигов и URI
+
+*🌐 NaiveProxy \\(админ\\):*
+/naive\\_status \\- Статус NaiveProxy
+/naive\\_config \\- Показать конфигурацию
+/naive\\_on \\- Включить NaiveProxy
+/naive\\_off \\- Выключить NaiveProxy
+/naive\\_set\\_domain \\- Установить домен
+/naive\\_set\\_port \\- Установить порт
+/naive\\_set\\_user \\- Установить пользователя
+/naive\\_set\\_password \\- Установить пароль
+/naive\\_gen\\_creds \\- Сгенерировать user/password
+/naive\\_install \\- Установить NaiveProxy на сервер
+/naive\\_uri \\- Показать клиентский URI
+/naive\\_apply \\- Записать Caddyfile и перезапустить сервис
+/naive\\_export \\- Экспорт client json и ApiNgRPC profile
 
 *📡 MTProto Proxy \\(админ\\):*
 /mt\\_status \\- Статус MTProto proxy
@@ -3577,6 +3593,227 @@ systemctl status xray
             await update.message.reply_text(f"Ошибка: {e}")
 
     # === ERROR HANDLER ===
+
+    async def naive_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /naive_status — показать состояние NaiveProxy."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            status = naiveproxy_manager.get_status()
+            enabled = "🟢 включен" if status.get("enabled") else "🔴 выключен"
+            configured = "да" if status.get("configured") else "нет"
+            systemd = status.get("systemd_output") or "unknown"
+            text = (
+                "🌐 NaiveProxy status\n\n"
+                f"Состояние: {enabled}\n"
+                f"Сконфигурирован: {configured}\n"
+                f"Домен: {status.get('domain') or '-'}\n"
+                f"Порт: {status.get('port')}\n"
+                f"Пользователь: {status.get('username') or '-'}\n"
+                f"Service: {status.get('service_name')}\n"
+                f"systemd: {systemd}"
+            )
+            await update.message.reply_text(text)
+        except Exception as e:
+            logger.error(f"Error in naive_status: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def naive_on(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /naive_on — включить NaiveProxy."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = naiveproxy_manager.enable()
+            await update.message.reply_text(message)
+        except Exception as e:
+            logger.error(f"Error in naive_on: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def naive_off(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /naive_off — выключить NaiveProxy."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = naiveproxy_manager.disable()
+            await update.message.reply_text(message)
+        except Exception as e:
+            logger.error(f"Error in naive_off: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def naive_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /naive_config — показать текущий конфиг NaiveProxy."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            config = naiveproxy_manager.get_config(include_secrets=self._secret_reveal_allowed())
+            text = (
+                "🌐 NaiveProxy config\n\n"
+                f"enabled: {config.get('enabled')}\n"
+                f"domain: {config.get('domain') or '-'}\n"
+                f"server: {config.get('server') or '-'}\n"
+                f"port: {config.get('port')}\n"
+                f"username: {config.get('username') or '-'}\n"
+                f"password: {config.get('password') or '-'}\n"
+                f"scheme: {config.get('scheme')}\n"
+                f"local_socks_port: {config.get('local_socks_port')}\n"
+                f"padding: {config.get('padding')}\n"
+                f"caddyfile_path: {config.get('caddyfile_path')}\n"
+                f"service_name: {config.get('service_name')}"
+            )
+            await update.message.reply_text(text)
+        except Exception as e:
+            logger.error(f"Error in naive_config: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def naive_set_domain(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /naive_set_domain <domain> — задать домен NaiveProxy."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            if not context.args:
+                await update.message.reply_text("Использование: /naive_set_domain <domain>")
+                return
+            success, message = naiveproxy_manager.set_domain(context.args[0])
+            await update.message.reply_text(message)
+        except Exception as e:
+            logger.error(f"Error in naive_set_domain: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def naive_set_port(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /naive_set_port <port> — задать порт NaiveProxy."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            if not context.args:
+                await update.message.reply_text("Использование: /naive_set_port <port>")
+                return
+            success, message = naiveproxy_manager.set_port(int(context.args[0]))
+            await update.message.reply_text(message)
+        except Exception as e:
+            logger.error(f"Error in naive_set_port: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def naive_set_user(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /naive_set_user <username> — задать пользователя NaiveProxy."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            if not context.args:
+                await update.message.reply_text("Использование: /naive_set_user <username>")
+                return
+            success, message = naiveproxy_manager.set_username(context.args[0])
+            await update.message.reply_text(message)
+        except Exception as e:
+            logger.error(f"Error in naive_set_user: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def naive_set_password(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /naive_set_password <password> — задать пароль NaiveProxy."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            if not context.args:
+                await update.message.reply_text("Использование: /naive_set_password <password>")
+                return
+            success, message = naiveproxy_manager.set_password(context.args[0])
+            await update.message.reply_text(message)
+        except Exception as e:
+            logger.error(f"Error in naive_set_password: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def naive_gen_creds(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /naive_gen_creds — сгенерировать user/password для NaiveProxy."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message, creds = naiveproxy_manager.generate_credentials()
+            if success:
+                await update.message.reply_text(
+                    f"{message}\nusername: {creds.get('username')}\npassword: {creds.get('password')}"
+                )
+            else:
+                await update.message.reply_text(message)
+        except Exception as e:
+            logger.error(f"Error in naive_gen_creds: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def naive_install(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /naive_install — запустить серверную установку NaiveProxy."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            await update.message.reply_text("⏳ Установка NaiveProxy...")
+            success, message = naiveproxy_manager.install_naiveproxy()
+            await update.message.reply_text("✅ Установка завершена" if success else "❌ Установка завершилась с ошибкой")
+            await self._reply_export_file(
+                update.message,
+                message,
+                "naive-install.log",
+                "NaiveProxy install output",
+            )
+        except Exception as e:
+            logger.error(f"Error in naive_install: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def naive_uri(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /naive_uri — показать клиентский URI NaiveProxy."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            uri = naiveproxy_manager.build_client_uri()
+            await update.message.reply_text(f"🌐 NaiveProxy URI:\n{uri}")
+        except Exception as e:
+            logger.error(f"Error in naive_uri: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def naive_apply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /naive_apply — записать Caddyfile и перезапустить сервис."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = naiveproxy_manager.apply_server_config()
+            await update.message.reply_text(message)
+        except Exception as e:
+            logger.error(f"Error in naive_apply: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def naive_export(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /naive_export — экспорт клиента и профиля для ApiNgRPC."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            client_config = naiveproxy_manager.export_client_config()
+            aping_profile = naiveproxy_manager.export_aping_profile()
+            uri = naiveproxy_manager.build_client_uri()
+            await update.message.reply_text(f"🌐 NaiveProxy URI:\n{uri}")
+            await self._reply_export_file(
+                update.message,
+                json.dumps(client_config, ensure_ascii=False, indent=2),
+                "naiveproxy-client.json",
+                "NaiveProxy client config",
+            )
+            await self._reply_export_file(
+                update.message,
+                aping_profile,
+                "aping-naive-profile.json",
+                "ApiNgRPC NaiveProxy profile",
+            )
+        except Exception as e:
+            logger.error(f"Error in naive_export: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
 
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка ошибок."""

@@ -61,8 +61,43 @@ This repository already contains helper scripts for the transport layer:
 - `scripts/setup_vless_server.sh`
 - `scripts/install_hysteria2.sh`
 - `scripts/install_mtproto.sh`
+- `scripts/install_naiveproxy.sh`
 
 Use only the transports you actually need on that VPS.
+
+### NaiveProxy via Caddy
+
+For `NaiveProxy`, the recommended server model in this repository is `Caddy + forwardproxy@naive`.
+
+Example:
+
+```bash
+sudo bash scripts/install_naiveproxy.sh --domain your.domain.example
+```
+
+Optional flags:
+
+- `--port 443`
+- `--username naive-user`
+- `--password strong-password`
+- `--email admin@your.domain.example`
+
+After install:
+
+```bash
+sudo systemctl status caddy-naive | cat
+sudo journalctl -u caddy-naive -n 100 | cat
+```
+
+You can then manage the saved NaiveProxy settings from the bot with:
+
+- `/naive_status`
+- `/naive_config`
+- `/naive_set_domain`
+- `/naive_gen_creds`
+- `/naive_install`
+- `/naive_apply`
+- `/naive_export`
 
 ## 6. Export For ApiXgRPC
 
@@ -72,6 +107,11 @@ After the server is configured:
 2. Run `/tgcapsule_export`
 3. Choose one of the TelegramOnly export targets
 4. Import the generated file into `ApiXgRPC`
+
+For NaiveProxy specifically, use `/naive_export` to receive:
+
+- native client JSON for `naive`
+- a simple `ApiNgRPC` profile JSON with `naiveproxy` settings
 
 ## 7. Validation
 
