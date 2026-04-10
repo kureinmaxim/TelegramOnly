@@ -72,6 +72,17 @@ AVAILABLE_FINGERPRINTS = [
 # - 8880: Alt HTTP
 RECOMMENDED_PORTS = [443, 8443, 2053, 2083, 2087, 2096, 8880]
 
+LEGACY_VLESS_REQUIRED_FIELDS = (
+    "server",
+    "port",
+    "uuid",
+    "public_key",
+    "short_id",
+    "sni",
+    "fingerprint",
+    "flow",
+)
+
 # Дефолтная конфигурация
 DEFAULT_CONFIG = {
     "enabled": False,
@@ -94,6 +105,36 @@ DEFAULT_CONFIG = {
     "headscale_domain": "",
     "ha_domain": "",
 }
+
+
+def build_legacy_vless_contract(config: Dict) -> Dict:
+    """
+    Собрать минимальный legacy Reality/VLESS контракт для старых клиентских экспортов.
+
+    Этот формат должен оставаться стабильным, чтобы `TelegramOnly` мог читать и
+    переиспользовать legacy-артефакты `TelegramSimple` без немедленной миграции VPS.
+    """
+    return {
+        "server": config.get("server", ""),
+        "port": config.get("port", 443),
+        "uuid": config.get("uuid", ""),
+        "public_key": config.get("public_key", ""),
+        "short_id": config.get("short_id", ""),
+        "sni": config.get("sni", "www.microsoft.com"),
+        "fingerprint": config.get("fingerprint", "firefox"),
+        "flow": config.get("flow", "xtls-rprx-vision"),
+    }
+
+
+def validate_legacy_vless_contract(payload: Dict) -> Tuple[bool, List[str]]:
+    """
+    Проверить, что legacy Reality/VLESS артефакт содержит все обязательные поля.
+    """
+    missing = [
+        field for field in LEGACY_VLESS_REQUIRED_FIELDS
+        if payload.get(field) in (None, "")
+    ]
+    return len(missing) == 0, missing
 
 
 def _normalize_clients(config: Dict) -> None:
@@ -757,16 +798,7 @@ def export_client_config() -> Dict:
     """
     config = _load_config()
     
-    return {
-        "server": config.get("server", ""),
-        "port": config.get("port", 443),
-        "uuid": config.get("uuid", ""),
-        "public_key": config.get("public_key", ""),
-        "short_id": config.get("short_id", ""),
-        "sni": config.get("sni", "www.microsoft.com"),
-        "fingerprint": config.get("fingerprint", "firefox"),
-        "flow": config.get("flow", "xtls-rprx-vision"),
-    }
+    return build_legacy_vless_contract(config)
 
 
 def save_vless_config_files(output_dir: str = None) -> Tuple[bool, str, List[str]]:
@@ -1162,6 +1194,13 @@ def export_apisb_profile(client_name: Optional[str] = None) -> Dict:
                 config = dict(config)  # shallow copy
                 config["uuid"] = c.get("uuid", config.get("uuid", ""))
                 break
+
+    is_valid, missing = validate_legacy_vless_contract(build_legacy_vless_contract(config))
+    if not is_valid:
+        logger.warning(
+            "Legacy Reality/VLESS contract is incomplete before ApiX export: missing %s",
+            ", ".join(missing),
+        )
 
     return build_reality_export(config, profile_name)
 

@@ -68,6 +68,13 @@ Recommended client flow:
 4. Select the imported profile in `ApiXgRPC`
 5. Use `ApiXgRPC` as the universal desktop client
 
+Legacy-compatible flow:
+
+1. Keep an existing `TelegramSimple`-style server layout such as `/opt/TelegramSimple`
+2. Continue reading the standard legacy Reality artifact `vless_config.json`
+3. Continue using legacy bot/client exports such as `/vless_export`
+4. Let `TelegramOnly` act as the new primary project without forcing an immediate server migration
+
 ## Important Files
 
 - `main.py` - runtime entry point
@@ -85,3 +92,14 @@ Recommended client flow:
 - `apix-profile v1` remains supported by `ApiXgRPC`
 - `apix-profile v2` adds `routing_policy`
 - `TelegramSimple` can remain untouched and be deployed separately
+- `TelegramOnly` is the primary forward path, but it must keep reading the legacy Reality/VLESS contract used by `TelegramSimple`
+- the legacy fallback contract is the classic `vless_config.json` fields:
+  - `server`
+  - `port`
+  - `uuid`
+  - `public_key`
+  - `short_id`
+  - `sni`
+  - `fingerprint`
+  - `flow`
+- if those fields are present, old servers do not need to be recreated before a client can keep working

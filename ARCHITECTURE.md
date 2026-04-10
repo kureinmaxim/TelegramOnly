@@ -227,6 +227,29 @@ The project mostly uses file-backed configuration and secrets:
 This makes the repository easy to operate on a small VPS, easy to back up, and easy to
 inspect manually when debugging deployments.
 
+### Legacy Reality/VLESS Contract
+
+For backward compatibility with `TelegramSimple`, `TelegramOnly` must continue to
+understand the classic client-facing Reality artifact stored as `vless_config.json`.
+
+The minimum fallback contract is:
+
+- `server`
+- `port`
+- `uuid`
+- `public_key`
+- `short_id`
+- `sni`
+- `fingerprint`
+- `flow`
+
+These fields are the compatibility boundary for older desktop clients and old VPS
+deployments that still expose `/opt/TelegramSimple/vless_config.json` and related
+exports such as `/vless_export`.
+
+`TelegramOnly` can add richer exports such as `apix-profile v2`, but it should not
+silently break this fallback contract while old servers and clients are still in use.
+
 ## Deployment Model
 
 TelegramOnly is designed for pragmatic VPS deployment.
@@ -243,6 +266,14 @@ Primary deployment documentation:
 - `README.md`
 - `INSTALL_VPS.md`
 - `scripts/install_telegramonly_vps.sh`
+
+Compatibility note:
+
+- primary target: `TelegramOnly` layout and deployment flow
+- transition fallback: read existing `/opt/TelegramSimple` artifacts without forcing an
+  immediate migration
+- layout migration and client artifact compatibility are separate concerns; the server
+  directory can change later, but the legacy Reality/VLESS contract should remain stable
 
 ## What Is Implemented Today
 
