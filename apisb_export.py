@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Единый legacy-формат экспорта профиля из TelegramSimple, совместимый с ApiXgRPC.
+Единый legacy-формат экспорта профиля из TelegramOnly, совместимый с ApiXgRPC.
 
 Формат: apisb-profile v1
 Один профиль = один серверный endpoint + один transport (Reality или Hysteria2).
@@ -19,7 +19,7 @@ VpnMode = Literal["auto", "tun", "socks5"]
 
 @dataclass
 class ExportSource:
-    app: str = "TelegramSimple"
+    app: str = "TelegramOnly"
     exported_at: str = ""
 
 
@@ -111,7 +111,7 @@ def build_reality_export(vless_cfg: dict, profile_name: str = "default") -> dict
     """
     return ApiSbExportProfile(
         source=ExportSource(
-            app="TelegramSimple",
+            app="TelegramOnly",
             exported_at=datetime.now(timezone.utc).isoformat(),
         ),
         profile=ExportProfile(
@@ -138,7 +138,7 @@ def build_reality_export(vless_cfg: dict, profile_name: str = "default") -> dict
         ),
         hysteria2=None,
         meta=ExportMeta(
-            subscription_name=f"TelegramSimple-{profile_name}",
+            subscription_name=f"TelegramOnly-{profile_name}",
             server_label=profile_name,
         ),
     ).to_dict()
@@ -157,7 +157,7 @@ def build_hysteria2_export(hy2_cfg: dict, profile_name: str = "default") -> dict
     """
     return ApiSbExportProfile(
         source=ExportSource(
-            app="TelegramSimple",
+            app="TelegramOnly",
             exported_at=datetime.now(timezone.utc).isoformat(),
         ),
         profile=ExportProfile(
@@ -184,7 +184,7 @@ def build_hysteria2_export(hy2_cfg: dict, profile_name: str = "default") -> dict
             obfs_password=hy2_cfg.get("obfs_password", ""),
         ),
         meta=ExportMeta(
-            subscription_name=f"TelegramSimple-{profile_name}",
+            subscription_name=f"TelegramOnly-{profile_name}",
             server_label=profile_name,
         ),
     ).to_dict()
@@ -204,7 +204,7 @@ def build_mtproto_export(mt_cfg: dict, profile_name: str = "default") -> dict:
     secret = mt_cfg.get("secret", "")
     return ApiSbExportProfile(
         source=ExportSource(
-            app="TelegramSimple",
+            app="TelegramOnly",
             exported_at=datetime.now(timezone.utc).isoformat(),
         ),
         profile=ExportProfile(
@@ -228,7 +228,7 @@ def build_mtproto_export(mt_cfg: dict, profile_name: str = "default") -> dict:
             is_fake_tls=secret.startswith("dd") if secret else False,
         ),
         meta=ExportMeta(
-            subscription_name=f"TelegramSimple-{profile_name}",
+            subscription_name=f"TelegramOnly-{profile_name}",
             server_label=profile_name,
         ),
     ).to_dict()

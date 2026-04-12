@@ -3,7 +3,7 @@
 """
 Точка входа для упрощённого Telegram бота с поддержкой VLESS-Reality.
 
-TelegramSimple Lite — это комплексное решение, объединяющее:
+TelegramOnly — это комплексное решение, объединяющее:
 1. Telegram-бот — управление API ключами, шифрованием и VLESS-Reality
 2. REST API — защищённый сервис для интеграции AI в сторонние приложения
 
@@ -70,7 +70,7 @@ def print_banner():
     banner = """
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║   🤖 TelegramSimple Lite                                     ║
+║   🤖 TelegramOnly                                            ║
 ║   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━                  ║
 ║                                                              ║
 ║   📡 API Management + 🛡️ VLESS-Reality Control               ║
@@ -150,7 +150,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    print("\n🚀 Starting TelegramSimple Lite...\n")
+    print("\n🚀 Starting TelegramOnly...\n")
     
     try:
         asyncio.run(main())

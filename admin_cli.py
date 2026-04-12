@@ -124,7 +124,7 @@ class AdminCLI:
         return f"""📋 Version Information
 
 🔖 Version: {version_info.get('version', 'N/A')}
-📦 Name: {version_info.get('name', 'TelegramSimple Lite')}
+📦 Name: {version_info.get('name', 'TelegramOnly')}
 📝 Description: {version_info.get('description', 'N/A')}
 
 🛡️ VLESS-Reality:

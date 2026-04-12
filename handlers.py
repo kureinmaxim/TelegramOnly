@@ -260,7 +260,7 @@ class BotHandlersLite:
             
             welcome_message = f"""Привет, {escape_markdown(user.first_name or 'Пользователь')}\\!
 
-🤖 *TelegramSimple Lite* \\- управление API и VLESS\\-Reality
+🤖 *TelegramOnly* \\- управление API и VLESS\\-Reality
 
 Статус VLESS\\-Reality: {vless_indicator} {"Включён" if vless_status["enabled"] else "Выключен"}
 
@@ -485,7 +485,7 @@ _SSH команды:_
             version_message = f"""📋 *Информация о версии приложения*
 
 🔖 Версия: `{version_info.get('version', 'N/A')}`
-📦 Название: {version_info.get('name', 'TelegramSimple Lite')}
+📦 Название: {version_info.get('name', 'TelegramOnly')}
 📝 Описание: {version_info.get('description', 'N/A')}
 
 🛡️ *VLESS\\-Reality:*

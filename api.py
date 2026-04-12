@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-TelegramSimple AI API
+TelegramOnly AI API
 
 REST API для AI-запросов с поддержкой:
 - Anthropic Claude
@@ -68,7 +68,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI
 app = FastAPI(
-    title="TelegramSimple AI API",
+    title="TelegramOnly AI API",
     description="Secure AI API for BOMCategorizer integration",
     version="3.6.0"
 )
@@ -112,7 +112,7 @@ async def startup_event():
                 logger.info("SecureMessenger initialized (default key)")
             except Exception as e:
                 logger.error(f"Failed to initialize SecureMessenger: {e}")
-    logger.info("TelegramSimple AI API started")
+    logger.info("TelegramOnly AI API started")
     logger.info(f"Security module: {'enabled' if SECURITY_AVAILABLE else 'disabled'}")
     logger.info(f"Anthropic: {'available' if ANTHROPIC_AVAILABLE else 'not available'}")
     logger.info(f"OpenAI: {'available' if OPENAI_AVAILABLE else 'not available'}")

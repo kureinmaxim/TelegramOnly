@@ -1011,7 +1011,7 @@ def generate_client_link(name_or_uuid: str) -> Tuple[bool, str, str]:
     if not client_uuid:
         return False, f"❌ У клиента {client_name} отсутствует UUID", ""
 
-    link = generate_vless_link_for_uuid(client_uuid, f"TelegramSimple-{client_name}")
+    link = generate_vless_link_for_uuid(client_uuid, f"TelegramOnly-{client_name}")
     if not link:
         return False, "❌ Не удалось сгенерировать VLESS ссылку. Проверьте настройки сервера, UUID и Public Key", ""
 
@@ -1152,7 +1152,7 @@ def export_subscription_list() -> List[str]:
     for client in clients:
         name = client.get("name") or "client"
         client_uuid = client.get("uuid") or ""
-        link = generate_vless_link_for_uuid(client_uuid, f"TelegramSimple-{name}")
+        link = generate_vless_link_for_uuid(client_uuid, f"TelegramOnly-{name}")
         if link:
             links.append(link)
     return links
