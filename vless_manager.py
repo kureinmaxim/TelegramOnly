@@ -1835,55 +1835,48 @@ def apply_xray_config() -> Tuple[bool, str]:
         Tuple[success, message]
     """
     config_path = "/usr/local/etc/xray/config.json"
-    
-    # Проверяем, работаем ли в Docker
-    in_docker = os.path.exists('/.dockerenv') or os.environ.get('DOCKER_CONTAINER')
-    
-    if in_docker:
-        return False, """❌ Из Docker контейнера нет доступа к Xray на хосте
 
-**Примените конфигурацию вручную через SSH:**
-
-1\\. `/vless_export` → "🖥️ Xray Server Config"
-2\\. Скопируйте JSON
-3\\. На сервере:
-```
-nano /usr/local/etc/xray/config\\.json
-```
-4\\. Вставьте JSON, сохраните \\(Ctrl\\+O, Ctrl\\+X\\)
-5\\. `systemctl restart xray`"""
-    
     try:
         # Генерируем серверную конфигурацию
         xray_config = export_xray_config(is_server=True)
-        
+
         # Проверяем что есть необходимые данные
         vless_config = _load_config()
         if not vless_config.get("uuid") or not vless_config.get("private_key"):
             return False, "❌ Сначала сгенерируйте ключи: /vless_gen_keys"
-        
+
         # Создаём директорию если нет
         os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        
+
         # Записываем конфиг
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(xray_config, f, indent=2, ensure_ascii=False)
-        
-        # Проверяем конфигурацию
+
+        # В Docker нет доступа к systemctl — конфиг записан, нужен ручной рестарт
+        in_docker = os.path.exists('/.dockerenv') or os.environ.get('DOCKER_CONTAINER')
+        if in_docker:
+            return True, "✅ Конфиг Xray обновлён\n\nНа сервере выполни:\n`systemctl restart xray`"
+
+        # Не Docker — можно проверить и перезапустить
         result = subprocess.run(
             ["xray", "-test", "-config", config_path],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
-        
         if result.returncode != 0:
             return False, f"❌ Ошибка в конфигурации:\n```\n{result.stderr[:500]}\n```"
-        
+
         return True, f"✅ Конфигурация применена!\n\n📄 `{config_path}`\n\nТеперь выполните: /xray_restart"
-        
-    except FileNotFoundError:
-        return False, "❌ Xray не установлен. Выполните: /xray_install"
+
+    except OSError as e:
+        # Директория недоступна (volume не подключён)
+        logger.error(f"Cannot write xray config: {e}")
+        return False, (
+            "❌ Не удалось записать конфиг Xray\n\n"
+            "Возможно, volume `/usr/local/etc/xray` не подключён.\n"
+            "Примени конфиг вручную: `/vless_export` → Xray Server Config"
+        )
     except Exception as e:
         logger.error(f"Error applying Xray config: {e}")
         return False, f"❌ Ошибка: {e}"

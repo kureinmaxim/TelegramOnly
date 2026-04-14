@@ -1174,6 +1174,9 @@ _Обновлено: {updated_at}_"""
                 response = f"{message}\nUUID: `{uuid_display}`"
                 await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN_V2)
                 await self._reply_vless_qr(update.message, client.get("uuid", name))
+                # Автоматически применяем конфиг к Xray
+                apply_ok, apply_msg = vless_manager.apply_xray_config()
+                await update.message.reply_text(apply_msg)
             else:
                 await update.message.reply_text(message)
 

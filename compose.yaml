@@ -20,6 +20,7 @@ services:
       - ./.env:/app/.env
       - ./app_keys.json:/app/app_keys.json
       - ./vless_config.json:/app/vless_config.json
+      - /usr/local/etc/xray:/usr/local/etc/xray
       - ./hysteria2_config.json:/app/hysteria2_config.json
       - ./mtproto_config.json:/app/mtproto_config.json
       - ./headscale_config.json:/app/headscale_config.json
