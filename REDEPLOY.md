@@ -132,7 +132,7 @@ cd /c/Project/TelegramSimple && tar --exclude='venv' --exclude='.venv' --exclude
 Выполнять локально:
 
 ```bash
-cd "/Users/olgazaharova/Project/ProjectPython/TelegramSimple"
+cd "/Users/olgazaharova/Project/ProjectPython/TelegramOnly"
 rsync -avz -e 'ssh -p 22542' \
   --exclude 'venv' \
   --exclude '.venv' \
@@ -238,7 +238,7 @@ cd /c/Project/TelegramSimple && tar --exclude='venv' --exclude='.venv' --exclude
 На macOS / Linux:
 
 ```bash
-cd "/Users/olgazaharova/Project/ProjectPython/TelegramSimple"
+cd "/Users/olgazaharova/Project/ProjectPython/TelegramOnly"
 rsync -avz -e 'ssh -p 22542' \
   --exclude 'venv' --exclude '.venv' --exclude '__pycache__' \
   --exclude '.env' --exclude '.env.deploy' \
