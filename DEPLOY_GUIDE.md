@@ -1,34 +1,22 @@
-# Deploy TelegramOnly на 138.124.71.73
+# Deploy TelegramOnly
 
-## Переходный режим TelegramOnly
+## Обзор
 
-Этот документ пока описывает legacy-совместимый серверный путь через
-`TelegramSimple` layout. Целевой primary path теперь `TelegramOnly`, но переход не
-должен ломать уже поднятые сервера.
+Полная инструкция по установке TelegramOnly на чистый VPS (Debian 11/12).
 
-Что считается обязательной совместимостью:
+Серверный скрипт `deploy_fresh_vps.sh` при запуске предлагает выбор:
 
-- текущий сервер с layout вроде `/opt/TelegramSimple` продолжает обслуживаться
-- client-facing Reality-артефакт `vless_config.json` остаётся читаемым fallback-форматом
-- обязательные поля fallback-контракта:
-  - `server`
-  - `port`
-  - `uuid`
-  - `public_key`
-  - `short_id`
-  - `sni`
-  - `fingerprint`
-  - `flow`
-- экспорты вроде `/vless_export` и импорт этих значений в `ApiXgRPC`/`ApiNgRPC` не требуют ручной миграции сервера
+```text
+Что установить на порт 443 (TCP)?
 
-Иными словами: этот сценарий допустим как compatibility path, даже если новым
-сервером по умолчанию считается `TelegramOnly`.
+  [1] VLESS-Reality (Xray)  — лучший стелс, маскировка под TLS
+  [2] NaiveProxy (Caddy)    — HTTPS-прокси, нужен домен, Chrome TLS
+```
 
-## Update Todos
-- [ ] Phase 1: Prepare compose.yaml without dockhand
-- [ ] Phase 2: Write server setup script (swap, Docker, Xray, Hy2, firewall)
-- [ ] Phase 3: Write deploy script (rsync + docker compose)
-- [ ] Phase 4: Post-deploy bot commands (VLESS, Hy2, MTProto)
+**VLESS-Reality** — не требует домен, лучший стелс, основной вариант.
+**NaiveProxy** — требует домен (например `naive.kurein.me`), Chrome TLS fingerprint, запасной канал.
+
+Серверный layout: `/opt/TelegramSimple` (исторический путь, не переименовывается).
 
 ---
 
@@ -61,7 +49,7 @@ ssh -p 22542 root@138.124.71.73
 Выполнять **на вашем Mac**, в отдельном локальном терминале:
 
 ```bash
-cd "/Users/olgazaharova/Project/ProjectPython/TelegramSimple"
+cd "/Users/olgazaharova/Project/ProjectPython/TelegramOnly"
 scp -P 22 scripts/deploy_fresh_vps.sh root@138.124.71.73:/root/
 ```
 
@@ -81,18 +69,21 @@ bash /root/deploy_fresh_vps.sh
 Он рассчитан на повторный запуск и обычно продолжает установку с уже выполненных шагов.
 
 ### Что делает серверный скрипт
+
 **Скрипт:** `scripts/deploy_fresh_vps.sh`
 
-Скрипт делает за один запуск:
+Скрипт спрашивает протокол на 443 (VLESS или NaiveProxy), затем:
+
 - Swap 1 GB (критично для 1 GB RAM)
 - Обновление системы + пакеты
 - Docker
-- Xray + генерация ключей VLESS-Reality
+- **VLESS path:** Xray + генерация ключей Reality
+- **NaiveProxy path:** Go + xcaddy + Caddy с forwardproxy (сборка ~5 мин)
 - Hysteria2 + генерация пароля
-- SSH workflow под `22542`
-- UFW firewall (SSH, TCP/443, UDP/443, TCP/8000, TCP/993)
+- SSH на порт `22542`
+- UFW firewall (SSH, TCP/443, UDP/443, TCP/8000, TCP/993; +80/tcp для NaiveProxy ACME)
 - Fail2ban
-- Подготовка `/opt/TelegramSimple` + файлы данных
+- Подготовка `/opt/TelegramSimple` + конфиг-файлы (`vless_config.json` или `naiveproxy_config.json`)
 - Сохранение credentials в `CREDENTIALS.txt`
 
 ---
@@ -126,14 +117,14 @@ bash /root/deploy_fresh_vps.sh
 #### Вариант A. Windows 11 + Git Bash
 
 ```bash
-cd /c/Project/TelegramSimple
+cd /c/Project/TelegramOnly
 cp example.env .env.deploy
 ```
 
 #### Вариант B. macOS / Linux
 
 ```bash
-cd "/Users/olgazaharova/Project/ProjectPython/TelegramSimple"
+cd "/Users/olgazaharova/Project/ProjectPython/TelegramOnly"
 cp example.env .env.deploy
 ```
 
@@ -148,7 +139,7 @@ cp example.env .env.deploy
 Вариант 1, через терминал:
 
 ```bash
-cd "/Users/olgazaharova/Project/ProjectPython/TelegramSimple"
+cd "/Users/olgazaharova/Project/ProjectPython/TelegramOnly"
 nano .env.deploy
 ```
 
@@ -286,7 +277,7 @@ apt-get update && apt-get install -y rsync
 #### Вариант A. Windows 11 + Git Bash
 
 ```bash
-cd /c/Project/TelegramSimple && tar --exclude='venv' --exclude='.venv' --exclude='__pycache__' --exclude='.env' --exclude='.env.deploy' --exclude='app_keys.json' --exclude='users.json' --exclude='*.log' --exclude='.git' -czf - . | ssh -p 22542 root@138.124.71.73 "cd /opt/TelegramSimple && tar -xzf -"
+cd /c/Project/TelegramOnly && tar --exclude='venv' --exclude='.venv' --exclude='__pycache__' --exclude='.env' --exclude='.env.deploy' --exclude='app_keys.json' --exclude='users.json' --exclude='*.log' --exclude='.git' -czf - . | ssh -p 22542 root@138.124.71.73 "cd /opt/TelegramSimple && tar -xzf -"
 ```
 
 Важно:
@@ -300,7 +291,7 @@ cd /c/Project/TelegramSimple && tar --exclude='venv' --exclude='.venv' --exclude
 Выполнять локально на вашем Mac:
 
 ```bash
-cd "/Users/olgazaharova/Project/ProjectPython/TelegramSimple"
+cd "/Users/olgazaharova/Project/ProjectPython/TelegramOnly"
 rsync -avz -e 'ssh -p 22542' \
   --exclude 'venv' --exclude '__pycache__' --exclude '.env' \
   --exclude 'app_keys.json' --exclude 'users.json' --exclude '*.log' \
@@ -314,7 +305,7 @@ rsync -avz -e 'ssh -p 22542' \
 #### Вариант A. Windows 11 + Git Bash
 
 ```bash
-cd /c/Project/TelegramSimple
+cd /c/Project/TelegramOnly
 scp -P 22542 .env.deploy root@138.124.71.73:/opt/TelegramSimple/.env
 ```
 
@@ -323,7 +314,7 @@ scp -P 22542 .env.deploy root@138.124.71.73:/opt/TelegramSimple/.env
 Выполнять локально **на вашем Mac** из папки проекта:
 
 ```bash
-cd "/Users/olgazaharova/Project/ProjectPython/TelegramSimple"
+cd "/Users/olgazaharova/Project/ProjectPython/TelegramOnly"
 scp -P 22542 .env.deploy root@138.124.71.73:/opt/TelegramSimple/.env
 ```
 
@@ -516,7 +507,7 @@ rm -rf /opt/TelegramSimple/.env
 После этого **с Mac** заново загрузите файл:
 
 ```bash
-cd "/Users/olgazaharova/Project/ProjectPython/TelegramSimple"
+cd "/Users/olgazaharova/Project/ProjectPython/TelegramOnly"
 scp .env.deploy root@138.124.71.73:/opt/TelegramSimple/.env
 ```
 
@@ -601,7 +592,7 @@ ls -ld /opt/TelegramSimple/.env | cat
 Потом **с Mac** заново загрузите файл:
 
 ```bash
-cd "/Users/olgazaharova/Project/ProjectPython/TelegramSimple"
+cd "/Users/olgazaharova/Project/ProjectPython/TelegramOnly"
 scp -P 22542 .env.deploy root@138.124.71.73:/opt/TelegramSimple/.env
 ```
 
@@ -692,7 +683,26 @@ cat /opt/TelegramSimple/vless_config.json | cat
 VLESS_GUIDE.md
 ```
 
+### NaiveProxy (если выбран при установке)
+
+Если скрипт установил NaiveProxy, проверка:
+
+```bash
+systemctl status caddy-naive --no-pager | cat
+cat /opt/TelegramSimple/naiveproxy_config.json | cat
+```
+
+Через бота:
+
+```text
+/naive_status
+/naive_config
+/naive_uri       — клиентский URI для подключения
+/naive_export    — экспорт JSON + ApiNgRPC profile
+```
+
 ### Hysteria2 (синхронизировать с сервером)
+
 ```text
 /hy2_set_server 138.124.71.73
 /hy2_set_port 443

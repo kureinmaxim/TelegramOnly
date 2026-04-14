@@ -6,7 +6,7 @@
 
 - сервер уже настроен
 - Docker и `docker compose` уже работают
-- проект на сервере лежит в `/opt/TelegramSimple`
+- проект на сервере лежит в `/opt/TelegramOnly`
 - SSH-подключение выполняется на `138.124.71.73:22542`
 
 ---
@@ -20,7 +20,7 @@
 3. пересобираем контейнер `telegram-helper`
 4. проверяем логи после запуска
 
-Важно: этот файл описывает **редеплой TelegramSimple-бота**, а не переустановку host-сервиса `mtproto-proxy`. Если `MTProto` уже работает на Debian-хосте, при обычном редеплое его не удаляем и не переустанавливаем.
+Важно: редеплой касается только контейнера бота `telegram-helper-lite`. Host-сервисы (Xray, NaiveProxy/Caddy, Hysteria2, MTProto) не затрагиваются.
 
 ---
 
@@ -32,6 +32,7 @@
 - `app_keys.json`
 - `users.json`
 - `vless_config.json`
+- `naiveproxy_config.json`
 - `hysteria2_config.json`
 - `mtproto_config.json`
 - `headscale_config.json`
@@ -68,7 +69,7 @@ ssh -p 22542 root@138.124.71.73
 Выполнять на сервере:
 
 ```bash
-cd /opt/TelegramSimple
+cd /opt/TelegramOnly
 ls -la | cat
 rm -rf .pytest_cache __pycache__ .DS_Store .env.deploy
 ```
@@ -90,7 +91,7 @@ docker container prune -f
 Выполнять на сервере:
 
 ```bash
-ls -ld /opt/TelegramSimple/.env | cat
+ls -ld /opt/TelegramOnly/.env | cat
 ```
 
 Должен быть обычный файл.
@@ -98,7 +99,7 @@ ls -ld /opt/TelegramSimple/.env | cat
 Если вдруг `.env` стал директорией, исправление такое:
 
 ```bash
-cd /opt/TelegramSimple
+cd /opt/TelegramOnly
 docker compose down
 rm -rf .env
 ```
@@ -106,7 +107,7 @@ rm -rf .env
 Потом залей `.env` заново:
 
 ```bash
-scp -P 22542 .env.deploy root@138.124.71.73:/opt/TelegramSimple/.env
+scp -P 22542 .env.deploy root@138.124.71.73:/opt/TelegramOnly/.env
 ```
 
 ---
@@ -118,7 +119,7 @@ scp -P 22542 .env.deploy root@138.124.71.73:/opt/TelegramSimple/.env
 Открой `Git Bash` и выполни **одной строкой**:
 
 ```bash
-cd /c/Project/TelegramSimple && tar --exclude='venv' --exclude='.venv' --exclude='__pycache__' --exclude='.env' --exclude='.env.deploy' --exclude='app_keys.json' --exclude='users.json' --exclude='*.log' --exclude='.git' -czf - . | ssh -p 22542 root@138.124.71.73 "cd /opt/TelegramSimple && tar -xzf -"
+cd /c/Project/TelegramOnly && tar --exclude='venv' --exclude='.venv' --exclude='__pycache__' --exclude='.env' --exclude='.env.deploy' --exclude='app_keys.json' --exclude='users.json' --exclude='*.log' --exclude='.git' -czf - . | ssh -p 22542 root@138.124.71.73 "cd /opt/TelegramOnly && tar -xzf -"
 ```
 
 Важно:
@@ -143,7 +144,7 @@ rsync -avz -e 'ssh -p 22542' \
   --exclude 'users.json' \
   --exclude '*.log' \
   --exclude '.git' \
-  ./ root@138.124.71.73:/opt/TelegramSimple/
+  ./ root@138.124.71.73:/opt/TelegramOnly/
 ```
 
 Важно:
@@ -159,7 +160,7 @@ rsync -avz -e 'ssh -p 22542' \
 Выполнять на сервере:
 
 ```bash
-cd /opt/TelegramSimple
+cd /opt/TelegramOnly
 docker compose up -d --build telegram-helper
 docker logs telegram-helper-lite --tail 100 | cat
 ```
@@ -174,7 +175,7 @@ docker logs telegram-helper-lite --tail 100 | cat
 
 ```bash
 ssh -p 22542 root@138.124.71.73
-cd /opt/TelegramSimple
+cd /opt/TelegramOnly
 python3 scripts/mtproto_sync_systemd.py
 systemctl show -p ExecStart mtproto-proxy --no-pager | cat
 ```
@@ -232,7 +233,7 @@ qrcode ok
 На Windows 11 в `Git Bash`:
 
 ```bash
-cd /c/Project/TelegramSimple && tar --exclude='venv' --exclude='.venv' --exclude='__pycache__' --exclude='.env' --exclude='.env.deploy' --exclude='app_keys.json' --exclude='users.json' --exclude='*.log' --exclude='.git' -czf - . | ssh -p 22542 root@138.124.71.73 "cd /opt/TelegramSimple && tar -xzf -"
+cd /c/Project/TelegramOnly && tar --exclude='venv' --exclude='.venv' --exclude='__pycache__' --exclude='.env' --exclude='.env.deploy' --exclude='app_keys.json' --exclude='users.json' --exclude='*.log' --exclude='.git' -czf - . | ssh -p 22542 root@138.124.71.73 "cd /opt/TelegramOnly && tar -xzf -"
 ```
 
 На macOS / Linux:
@@ -244,14 +245,14 @@ rsync -avz -e 'ssh -p 22542' \
   --exclude '.env' --exclude '.env.deploy' \
   --exclude 'app_keys.json' --exclude 'users.json' --exclude '*.log' \
   --exclude '.git' \
-  ./ root@138.124.71.73:/opt/TelegramSimple/
+  ./ root@138.124.71.73:/opt/TelegramOnly/
 ```
 
 На сервере:
 
 ```bash
 ssh -p 22542 root@138.124.71.73
-cd /opt/TelegramSimple
+cd /opt/TelegramOnly
 docker compose up -d --build telegram-helper
 docker logs telegram-helper-lite --tail 100 | cat
 ```
@@ -269,6 +270,6 @@ docker logs telegram-helper-lite --tail 100 | cat
 - перепутаны файлы `.env`, конфиги или volume-монтирования
 - нужно почти с нуля привести проект на сервере в порядок
 
-Для обычного обновления кода используй именно этот файл: `Redeploy TelegramOnly.md`.
+Для обычного обновления кода используй именно этот файл: `REDEPLOY.md`.
 
-Если сервер не сломан, но в `/opt/TelegramSimple` накопились лишние dev/doc/cache-файлы, используй отдельную инструкцию: `Чистка лишних файлов на сервере.md`.
+Если сервер не сломан, но в `/opt/TelegramOnly` накопились лишние файлы, используй `SERVER_CLEANUP_EXTRA.md`.
