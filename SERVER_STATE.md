@@ -1,4 +1,4 @@
-# Состояние сервера kurein.me — 2026-04-12
+# Состояние сервера kurein.me — 2026-04-14
 
 Документ фиксирует текущее состояние инфраструктуры, что уже сделано,
 какими командами проверялось и что предстоит сделать.
@@ -151,16 +151,20 @@ docker ps
 
 Маунты контейнера:
 ```
-/opt/TelegramSimple/app_keys.json      → /app/app_keys.json
+/opt/TelegramSimple/app_keys.json         → /app/app_keys.json
 /opt/TelegramSimple/hysteria2_config.json → /app/hysteria2_config.json
 /opt/TelegramSimple/mtproto_config.json   → /app/mtproto_config.json
 /opt/TelegramSimple/users.json            → /app/users.json
 /opt/TelegramSimple/headscale_config.json → /app/headscale_config.json
-/opt/TelegramSimple/.env               → /app/.env
-/opt/TelegramSimple/vless_config.json  → /app/vless_config.json
-/opt/TelegramSimple/bot.log            → /app/bot.log
-/var/run/docker.sock                   → /var/run/docker.sock
+/opt/TelegramSimple/.env                  → /app/.env
+/opt/TelegramSimple/vless_config.json     → /app/vless_config.json
+/opt/TelegramSimple/bot.log               → /app/bot.log
+/var/run/docker.sock                      → /var/run/docker.sock
+/usr/local/etc/xray                       → /usr/local/etc/xray  ← для apply_xray_config
 ```
+
+> После `/vless_add_client` бот автоматически записывает обновлённый конфиг в `/usr/local/etc/xray/config.json` и просит выполнить `systemctl restart xray`.
+> Права на директорию должны быть `drwxr-xrwx` (`chmod o+w /usr/local/etc/xray/`) и файл `chmod o+w /usr/local/etc/xray/config.json`.
 
 #### SSH
 
@@ -249,23 +253,16 @@ Health: curl -sk https://headscale.kurein.me:8443/health → {"status":"pass"}
 DERP:   https://controlplane.tailscale.com/derpmap/default
 ```
 
-### ✅ Шаг 4 — Подключение клиентов — ВЫПОЛНЕНО 2026-04-12
+### ✅ Шаг 4 — Подключение клиентов — ВЫПОЛНЕНО 2026-04-12, обновлено 2026-04-14
 
 ```text
-Узел 1: macbook-kurein  (MacBook)
-  IP:        100.64.0.1, fd7a:115c:a1e0::1
-  User:      kurein
-  Connected: online ✅
-
-Узел 2: debian  (Debian ноутбук)
-  IP:        100.64.0.2, fd7a:115c:a1e0::2
-  User:      kurein
-  Connected: online ✅
-
-Ping между узлами: работает ✅
-  macbook-kurein → 100.64.0.2 ✅
-  debian         → 100.64.0.1 ✅
+Узел 1: mac-kurein      (MacBook)        100.64.0.1  online ✅
+Узел 2: debian-fuji     (Debian ноутбук) 100.64.0.2  offline (выключен)
+Узел 3: iphone-kurein   (iPhone)         100.64.0.3  online ✅
 ```
+
+Регистрация iPhone: через Tailscale app → Log in with other →
+`https://headscale.kurein.me:8443` → команда `headscale nodes register --key <24-char-key> --user kurein`
 
 Команды управления (на VPS):
 
@@ -294,7 +291,8 @@ docker exec headscale headscale users list | cat
     └─── TCP 22542 ──→ SSH ✅
 
 Tailscale mesh (через Headscale):
-    macbook-kurein   100.64.0.1   online ✅
+    mac-kurein     100.64.0.1  ←──→  100.64.0.2  debian-fuji
+    iphone-kurein  100.64.0.3  ←──→  (все узлы)
 ```
 
 ## Подключение новых устройств к Headscale mesh
@@ -322,14 +320,14 @@ sudo tailscale up \
 
 ## Mac (рабочая машина)
 
-**Путь к проекту TelegramSimple:**
+**Путь к проекту TelegramOnly:**
 ```
-/Users/olgazaharova/Project/ProjectPython/TelegramSimple/
+/Users/olgazaharova/Project/ProjectPython/TelegramOnly/
 ```
 
 **`.env.deploy` существует:**
 ```bash
-ls -la "/Users/olgazaharova/Project/ProjectPython/TelegramSimple/.env.deploy"
+ls -la "/Users/olgazaharova/Project/ProjectPython/TelegramOnly/.env.deploy"
 # -rw-r--r-- Apr 5 19:23  (файл есть)
 ```
 
@@ -350,3 +348,40 @@ ssh -p 22542 root@138.124.71.73 "ss -tulpn | cat"
 # Проверить Headscale (после установки)
 curl -sk https://headscale.kurein.me:8443/health
 ```
+
+---
+
+## NaiveProxy — план (не реализован)
+
+NaiveProxy маскирует трафик под Chrome HTTPS, обходит DPI.
+Бот уже поддерживает управление через команды `/naive_*`.
+
+**Проблема:** порт 443 на `138.124.71.73` занят Xray Reality.
+
+**Выбранный вариант:** поднять на поддомене `naive.kurein.me` на порту `8444`.
+
+```text
+naive.kurein.me → A → 138.124.71.73 (Cloudflare Proxy OFF)
+Caddy слушает: 8444
+```
+
+**Что нужно сделать на сервере:**
+```bash
+# 1. Установить Go и собрать Caddy с NaiveProxy плагином
+apt install -y golang-go
+go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+~/go/bin/xcaddy build \
+  --with github.com/caddyserver/forwardproxy@caddy2=github.com/klzgrad/forwardproxy@naive \
+  --output /usr/local/bin/caddy
+
+# 2. Добавить DNS запись naive.kurein.me в Cloudflare
+
+# 3. Через бота:
+# /naive_set_domain naive.kurein.me
+# /naive_set_port 8444
+# /naive_gen_creds
+# /naive_apply
+```
+
+**Стелс:** хороший (Chrome TLS fingerprint), но порт 8444 менее стелс чем 443.
+Основной VPN остаётся VLESS Reality. NaiveProxy — запасной канал.
