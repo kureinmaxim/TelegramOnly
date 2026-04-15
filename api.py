@@ -70,7 +70,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="TelegramOnly AI API",
     description="Secure AI API for BOMCategorizer integration",
-    version="3.6.1"
+    version="3.6.2"
 )
 
 # Add CORS middleware for Tauri app
@@ -308,7 +308,7 @@ async def root():
     """Проверка состояния API"""
     return HealthResponse(
         status="running",
-        version="3.6.1",
+        version="3.6.2",
         security="full" if SECURITY_AVAILABLE else "basic",
         encryption="available" if (ENCRYPTION_AVAILABLE and secure_messenger) else "disabled",
         providers={

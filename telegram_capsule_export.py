@@ -13,6 +13,9 @@ from typing import Dict, List, Optional
 
 import hysteria2_manager
 import vless_manager
+import tuic_manager
+import anytls_manager
+import xhttp_manager
 
 
 ROUTING_MODE_TELEGRAM_ONLY = "telegram_only"
@@ -64,7 +67,8 @@ def _normalize_hysteria2_config(client_name: Optional[str] = None) -> Dict:
         for client in config.get("clients", []):
             if client.get("name") == client_name:
                 config = dict(config)
-                config["password"] = client.get("password", config.get("password", ""))
+                # Userpass format: name:password (sing-box expects this in password field)
+                config["password"] = f"{client_name}:{client.get('password', '')}"
                 break
     return config
 
@@ -331,3 +335,304 @@ def export_clash_meta_config(strategy: str, client_name: Optional[str] = None) -
         lines.append(f"  - DOMAIN-SUFFIX,{domain},TelegramOnly")
     lines.append("  - MATCH,DIRECT")
     return "\n".join(lines)
+
+
+# =====================================================================
+# TUIC / AnyTLS / XHTTP — TelegramOnly exports
+# =====================================================================
+
+def _normalize_tuic_config(client_name: Optional[str] = None) -> Dict:
+    config = tuic_manager.get_config(include_secrets=True)
+    if client_name:
+        for client in config.get("clients", []):
+            if client.get("name") == client_name:
+                config = dict(config)
+                config["_client_uuid"] = client.get("uuid", "")
+                config["_client_password"] = client.get("password", "")
+                break
+    else:
+        clients = config.get("clients", [])
+        if clients:
+            config = dict(config)
+            config["_client_uuid"] = clients[0].get("uuid", "")
+            config["_client_password"] = clients[0].get("password", "")
+    return config
+
+
+def _normalize_anytls_config(client_name: Optional[str] = None) -> Dict:
+    config = anytls_manager.get_config(include_secrets=True)
+    if client_name:
+        for client in config.get("clients", []):
+            if client.get("name") == client_name:
+                config = dict(config)
+                config["_client_password"] = client.get("password", "")
+                break
+    else:
+        clients = config.get("clients", [])
+        if clients:
+            config = dict(config)
+            config["_client_password"] = clients[0].get("password", "")
+    return config
+
+
+def _normalize_xhttp_config(client_name: Optional[str] = None) -> Dict:
+    config = xhttp_manager.get_config(include_secrets=True)
+    if client_name:
+        for client in config.get("clients", []):
+            if client.get("name") == client_name:
+                config = dict(config)
+                config["_client_uuid"] = client.get("uuid", "")
+                break
+    else:
+        clients = config.get("clients", [])
+        if clients:
+            config = dict(config)
+            config["_client_uuid"] = clients[0].get("uuid", "")
+    return config
+
+
+def export_singbox_config_tuic(client_name: Optional[str] = None) -> Dict:
+    """Sing-box Telegram-only config with TUIC outbound."""
+    config = _normalize_tuic_config(client_name)
+
+    outbound = {
+        "type": "tuic",
+        "tag": "proxy",
+        "server": config.get("server", ""),
+        "server_port": config.get("port", 443),
+        "uuid": config.get("_client_uuid", ""),
+        "password": config.get("_client_password", ""),
+        "congestion_control": config.get("congestion_control", "bbr"),
+        "udp_relay_mode": config.get("udp_relay_mode", "native"),
+        "tls": {
+            "enabled": True,
+            "server_name": config.get("sni", "") or config.get("server", ""),
+            "insecure": config.get("insecure", False),
+        },
+    }
+    alpn = config.get("alpn", ["h3"])
+    if alpn:
+        outbound["tls"]["alpn"] = alpn
+
+    return {
+        "log": {"level": "warn"},
+        "dns": {
+            "servers": [
+                {"tag": "google", "address": "8.8.8.8"},
+                {"tag": "cloudflare", "address": "1.1.1.1"},
+            ],
+            "final": "google",
+        },
+        "inbounds": [
+            {"type": "socks", "tag": "socks-in", "listen": "127.0.0.1", "listen_port": 1080, "sniff": True},
+            {"type": "http", "tag": "http-in", "listen": "127.0.0.1", "listen_port": 1081, "sniff": True},
+        ],
+        "outbounds": [
+            outbound,
+            {"type": "direct", "tag": "direct"},
+            {"type": "dns", "tag": "dns-out"},
+        ],
+        "route": _telegram_singbox_route("proxy"),
+    }
+
+
+def export_singbox_config_anytls(client_name: Optional[str] = None) -> Dict:
+    """Sing-box Telegram-only config with AnyTLS outbound."""
+    config = _normalize_anytls_config(client_name)
+
+    outbound = {
+        "type": "anytls",
+        "tag": "proxy",
+        "server": config.get("server", ""),
+        "server_port": config.get("port", 443),
+        "password": config.get("_client_password", ""),
+        "tls": {
+            "enabled": True,
+            "server_name": config.get("sni", "") or config.get("server", ""),
+            "insecure": config.get("insecure", False),
+        },
+    }
+
+    return {
+        "log": {"level": "warn"},
+        "dns": {
+            "servers": [
+                {"tag": "google", "address": "8.8.8.8"},
+                {"tag": "cloudflare", "address": "1.1.1.1"},
+            ],
+            "final": "google",
+        },
+        "inbounds": [
+            {"type": "socks", "tag": "socks-in", "listen": "127.0.0.1", "listen_port": 1080, "sniff": True},
+            {"type": "http", "tag": "http-in", "listen": "127.0.0.1", "listen_port": 1081, "sniff": True},
+        ],
+        "outbounds": [
+            outbound,
+            {"type": "direct", "tag": "direct"},
+            {"type": "dns", "tag": "dns-out"},
+        ],
+        "route": _telegram_singbox_route("proxy"),
+    }
+
+
+def export_singbox_config_xhttp(client_name: Optional[str] = None) -> Dict:
+    """Sing-box Telegram-only config with VLESS+XHTTP outbound."""
+    config = _normalize_xhttp_config(client_name)
+
+    outbound = {
+        "type": "vless",
+        "tag": "proxy",
+        "server": config.get("server", ""),
+        "server_port": config.get("port", 443),
+        "uuid": config.get("_client_uuid", ""),
+        "transport": {
+            "type": "xhttp",
+            "path": config.get("path", "/"),
+        },
+    }
+
+    mode = config.get("mode", "auto")
+    if mode and mode != "auto":
+        outbound["transport"]["mode"] = mode
+
+    host = config.get("host", "")
+    if host:
+        outbound["transport"]["host"] = host
+
+    security = config.get("security", "tls")
+    if security == "tls":
+        outbound["tls"] = {
+            "enabled": True,
+            "server_name": config.get("sni", "") or config.get("server", ""),
+            "insecure": config.get("insecure", False),
+        }
+
+    return {
+        "log": {"level": "warn"},
+        "dns": {
+            "servers": [
+                {"tag": "google", "address": "8.8.8.8"},
+                {"tag": "cloudflare", "address": "1.1.1.1"},
+            ],
+            "final": "google",
+        },
+        "inbounds": [
+            {"type": "socks", "tag": "socks-in", "listen": "127.0.0.1", "listen_port": 1080, "sniff": True},
+            {"type": "http", "tag": "http-in", "listen": "127.0.0.1", "listen_port": 1081, "sniff": True},
+        ],
+        "outbounds": [
+            outbound,
+            {"type": "direct", "tag": "direct"},
+            {"type": "dns", "tag": "dns-out"},
+        ],
+        "route": _telegram_singbox_route("proxy"),
+    }
+
+
+def export_clash_meta_config_tuic(client_name: Optional[str] = None) -> str:
+    """Clash Meta Telegram-only config with TUIC proxy."""
+    config = _normalize_tuic_config(client_name)
+
+    lines = [
+        "port: 7890", "socks-port: 7891", "mixed-port: 7892",
+        "mode: rule", "log-level: info", "",
+        "proxies:",
+        "  - name: TelegramOnly-TUIC",
+        "    type: tuic",
+        f"    server: {config.get('server', '')}",
+        f"    port: {config.get('port', 443)}",
+        f"    uuid: {config.get('_client_uuid', '')}",
+        f"    password: {config.get('_client_password', '')}",
+        f"    congestion-controller: {config.get('congestion_control', 'bbr')}",
+        f"    udp-relay-mode: {config.get('udp_relay_mode', 'native')}",
+    ]
+    alpn = config.get("alpn", ["h3"])
+    if alpn:
+        lines.append("    alpn:")
+        for a in alpn:
+            lines.append(f"      - {a}")
+    if config.get("sni"):
+        lines.append(f"    sni: {config.get('sni')}")
+    if config.get("insecure"):
+        lines.append("    skip-cert-verify: true")
+
+    lines.extend(_clash_telegram_rules("TelegramOnly-TUIC"))
+    return "\n".join(lines)
+
+
+def export_clash_meta_config_anytls(client_name: Optional[str] = None) -> str:
+    """Clash Meta Telegram-only config with AnyTLS proxy."""
+    config = _normalize_anytls_config(client_name)
+
+    lines = [
+        "port: 7890", "socks-port: 7891", "mixed-port: 7892",
+        "mode: rule", "log-level: info", "",
+        "proxies:",
+        "  - name: TelegramOnly-AnyTLS",
+        "    type: anytls",
+        f"    server: {config.get('server', '')}",
+        f"    port: {config.get('port', 443)}",
+        f"    password: {config.get('_client_password', '')}",
+    ]
+    if config.get("sni"):
+        lines.append(f"    sni: {config.get('sni')}")
+    if config.get("insecure"):
+        lines.append("    skip-cert-verify: true")
+
+    lines.extend(_clash_telegram_rules("TelegramOnly-AnyTLS"))
+    return "\n".join(lines)
+
+
+def export_clash_meta_config_xhttp(client_name: Optional[str] = None) -> str:
+    """Clash Meta Telegram-only config with VLESS+XHTTP proxy."""
+    config = _normalize_xhttp_config(client_name)
+
+    lines = [
+        "port: 7890", "socks-port: 7891", "mixed-port: 7892",
+        "mode: rule", "log-level: info", "",
+        "proxies:",
+        "  - name: TelegramOnly-XHTTP",
+        "    type: vless",
+        f"    server: {config.get('server', '')}",
+        f"    port: {config.get('port', 443)}",
+        f"    uuid: {config.get('_client_uuid', '')}",
+        "    network: xhttp",
+        "    xhttp-opts:",
+        f"      path: {config.get('path', '/')}",
+    ]
+    mode = config.get("mode", "auto")
+    if mode and mode != "auto":
+        lines.append(f"      mode: {mode}")
+    host = config.get("host", "")
+    if host:
+        lines.append(f"      host: {host}")
+
+    security = config.get("security", "tls")
+    if security == "tls":
+        lines.append("    tls: true")
+        if config.get("sni"):
+            lines.append(f"    servername: {config.get('sni')}")
+        if config.get("insecure"):
+            lines.append("    skip-cert-verify: true")
+
+    lines.extend(_clash_telegram_rules("TelegramOnly-XHTTP"))
+    return "\n".join(lines)
+
+
+def _clash_telegram_rules(proxy_name: str) -> List[str]:
+    """Common Clash Meta proxy-groups + Telegram routing rules."""
+    lines = [
+        "",
+        "proxy-groups:",
+        "  - name: TelegramOnly",
+        "    type: select",
+        "    proxies:",
+        f"      - {proxy_name}",
+        "      - DIRECT",
+        "",
+        "rules:",
+    ]
+    for domain in TELEGRAM_DOMAINS:
+        lines.append(f"  - DOMAIN-SUFFIX,{domain},TelegramOnly")
+    lines.append("  - MATCH,DIRECT")
+    return lines

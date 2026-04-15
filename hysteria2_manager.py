@@ -665,11 +665,16 @@ def remove_client(name_or_password: str) -> Tuple[bool, str]:
 
 # === Export Configurations ===
 
-def generate_hy2_uri(client_password: Optional[str] = None, comment: str = "Hysteria2") -> str:
+def generate_hy2_uri(
+    client_name: Optional[str] = None,
+    client_password: Optional[str] = None,
+    comment: str = "Hysteria2",
+) -> str:
     """
     Генерация URI hy2:// для клиента.
 
-    Format: hy2://password@server:port/?insecure=1&sni=xxx&obfs=salamander&obfs-password=xxx#comment
+    Userpass format:  hy2://name:password@server:port/?insecure=1&sni=xxx#comment
+    Single format:    hy2://password@server:port/?insecure=1&sni=xxx#comment
     """
     config = _load_config()
 
@@ -699,7 +704,13 @@ def generate_hy2_uri(client_password: Optional[str] = None, comment: str = "Hyst
     query_string = "&".join([f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items()])
     comment_enc = urllib.parse.quote(comment)
 
-    uri = f"hy2://{urllib.parse.quote(password)}@{server}:{port}"
+    # Userpass: hy2://name:password@...  Single: hy2://password@...
+    if client_name:
+        auth_part = f"{urllib.parse.quote(client_name)}:{urllib.parse.quote(password)}"
+    else:
+        auth_part = urllib.parse.quote(password)
+
+    uri = f"hy2://{auth_part}@{server}:{port}"
     if query_string:
         uri += f"/?{query_string}"
     uri += f"#{comment_enc}"
@@ -733,7 +744,7 @@ def generate_client_uri(name_or_password: str) -> Tuple[bool, str, str]:
     if not client_password:
         return False, f"❌ У клиента {client_name} отсутствует пароль", ""
 
-    uri = generate_hy2_uri(client_password, f"Hysteria2-{client_name}")
+    uri = generate_hy2_uri(client_name, client_password, f"Hysteria2-{client_name}")
     if not uri:
         return False, "❌ Не удалось сгенерировать Hysteria2 URI. Проверьте настройки сервера и пароль", ""
 
@@ -806,16 +817,36 @@ def export_server_config() -> Dict:
     """
     config = _load_config()
 
+    clients = config.get("clients", [])
+
+    # Use userpass auth when per-user clients exist, single password otherwise
+    if clients:
+        userpass_map = {}
+        for c in clients:
+            name = c.get("name", "")
+            pwd = c.get("password", "")
+            if name and pwd:
+                userpass_map[name] = pwd
+        auth_block = {
+            "type": "userpass",
+            "userpass": userpass_map,
+        } if userpass_map else {
+            "type": "password",
+            "password": config.get("password", ""),
+        }
+    else:
+        auth_block = {
+            "type": "password",
+            "password": config.get("password", ""),
+        }
+
     server_config = {
         "listen": f":{config.get('port', 443)}",
         "tls": {
             "cert": config.get("tls_cert_path", "/etc/hysteria/server.crt"),
             "key": config.get("tls_key_path", "/etc/hysteria/server.key"),
         },
-        "auth": {
-            "type": "password",
-            "password": config.get("password", ""),
-        },
+        "auth": auth_block,
     }
 
     # Bandwidth (optional)
@@ -883,15 +914,27 @@ def export_server_config_yaml() -> str:
     return "\n".join(lines)
 
 
-def export_client_config() -> Dict:
+def export_client_config(client_name: Optional[str] = None) -> Dict:
     """
     Сгенерировать клиентскую конфигурацию Hysteria2 (native format).
+
+    If client_name is provided and clients exist, uses 'name:password' auth.
     """
     config = _load_config()
 
+    # Determine auth string: name:password for userpass, plain password otherwise
+    auth_str = config.get("password", "")
+    if client_name:
+        client = next(
+            (c for c in config.get("clients", []) if c.get("name") == client_name),
+            None,
+        )
+        if client and client.get("password"):
+            auth_str = f"{client_name}:{client['password']}"
+
     client_config = {
         "server": f"{config.get('server', '')}:{config.get('port', 443)}",
-        "auth": config.get("password", ""),
+        "auth": auth_str,
         "tls": {},
         "socks5": {
             "listen": "127.0.0.1:1080",
@@ -930,18 +973,30 @@ def export_client_config() -> Dict:
     return client_config
 
 
-def export_singbox_config() -> Dict:
+def export_singbox_config(client_name: Optional[str] = None) -> Dict:
     """
     Сгенерировать конфигурацию sing-box (client) с Hysteria2 outbound.
+
+    If client_name is provided, uses 'name:password' in password field.
     """
     config = _load_config()
+
+    # Determine password: name:password for userpass, plain otherwise
+    password_str = config.get("password", "")
+    if client_name:
+        client = next(
+            (c for c in config.get("clients", []) if c.get("name") == client_name),
+            None,
+        )
+        if client and client.get("password"):
+            password_str = f"{client_name}:{client['password']}"
 
     outbound = {
         "type": "hysteria2",
         "tag": "proxy",
         "server": config.get("server", ""),
         "server_port": config.get("port", 443),
-        "password": config.get("password", ""),
+        "password": password_str,
         "tls": {
             "enabled": True,
             "server_name": config.get("sni", "") or config.get("server", ""),
@@ -975,7 +1030,7 @@ def export_singbox_config() -> Dict:
     }
 
 
-def export_clash_meta_config() -> str:
+def export_clash_meta_config(client_name: Optional[str] = None) -> str:
     """
     Сгенерировать конфигурацию Clash Meta (YAML) с Hysteria2 proxy.
     """
@@ -983,6 +1038,14 @@ def export_clash_meta_config() -> str:
     server = config.get("server", "")
     port = config.get("port", 443)
     password = config.get("password", "")
+
+    if client_name:
+        client = next(
+            (c for c in config.get("clients", []) if c.get("name") == client_name),
+            None,
+        )
+        if client and client.get("password"):
+            password = f"{client_name}:{client['password']}"
     sni = config.get("sni", "")
     insecure = config.get("insecure", False)
     obfs_type = config.get("obfs_type", "")
@@ -1037,7 +1100,7 @@ def export_subscription_list() -> List[str]:
     for client in clients:
         name = client.get("name") or "client"
         client_password = client.get("password") or ""
-        link = generate_hy2_uri(client_password, f"Hysteria2-{name}")
+        link = generate_hy2_uri(name, client_password, f"Hysteria2-{name}")
         if link:
             links.append(link)
     return links

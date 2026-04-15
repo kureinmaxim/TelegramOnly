@@ -45,6 +45,9 @@ import hysteria2_manager
 import mtproto_manager
 import headscale_manager
 import naiveproxy_manager
+import tuic_manager
+import anytls_manager
+import xhttp_manager
 import telegram_capsule_export
 
 logger = logging.getLogger(__name__)
@@ -245,7 +248,84 @@ class BotHandlersLite:
 
         reply_markup = InlineKeyboardMarkup(keyboard)
         await message.reply_text("Выберите MTProto-клиента для показа QR:", reply_markup=reply_markup)
-    
+
+    async def _reply_tuic_qr(self, message, name: str):
+        """Отправить QR и URI для TUIC-клиента."""
+        success, response, payload = tuic_manager.build_client_qr_payload(name)
+        if not success:
+            await message.reply_text(response)
+            return False
+
+        qr_buffer = payload["qr_buffer"]
+        qr_buffer.name = f"tuic-{payload['name']}.png"
+
+        await message.reply_photo(
+            photo=qr_buffer,
+            caption=f"QR для TUIC-клиента {payload['name']}",
+        )
+        await message.reply_text(
+            "🔷 TUIC QR для клиента {name}\n\n"
+            "UUID: {uuid}\n"
+            "Password: {password}\n\n"
+            "URI:\n{uri}".format(
+                name=payload["name"],
+                uuid=payload["uuid"],
+                password=payload["password"],
+                uri=payload["uri"],
+            )
+        )
+        return True
+
+    async def _reply_anytls_qr(self, message, name: str):
+        """Отправить QR и URI для AnyTLS-клиента."""
+        success, response, payload = anytls_manager.build_client_qr_payload(name)
+        if not success:
+            await message.reply_text(response)
+            return False
+
+        qr_buffer = payload["qr_buffer"]
+        qr_buffer.name = f"anytls-{payload['name']}.png"
+
+        await message.reply_photo(
+            photo=qr_buffer,
+            caption=f"QR для AnyTLS-клиента {payload['name']}",
+        )
+        await message.reply_text(
+            "🔶 AnyTLS QR для клиента {name}\n\n"
+            "Password: {password}\n\n"
+            "URI:\n{uri}".format(
+                name=payload["name"],
+                password=payload["password"],
+                uri=payload["uri"],
+            )
+        )
+        return True
+
+    async def _reply_xhttp_qr(self, message, name: str):
+        """Отправить QR и URI для XHTTP-клиента."""
+        success, response, payload = xhttp_manager.build_client_qr_payload(name)
+        if not success:
+            await message.reply_text(response)
+            return False
+
+        qr_buffer = payload["qr_buffer"]
+        qr_buffer.name = f"xhttp-{payload['name']}.png"
+
+        await message.reply_photo(
+            photo=qr_buffer,
+            caption=f"QR для XHTTP-клиента {payload['name']}",
+        )
+        await message.reply_text(
+            "🌐 XHTTP QR для клиента {name}\n\n"
+            "UUID: {uuid}\n\n"
+            "URI:\n{uri}".format(
+                name=payload["name"],
+                uuid=payload["uuid"],
+                uri=payload["uri"],
+            )
+        )
+        return True
+
     # === БАЗОВЫЕ КОМАНДЫ ===
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -278,166 +358,292 @@ class BotHandlersLite:
                 "Привет! Используйте /help для просмотра команд."
             )
     
+    # === Help: section texts (class-level) ===
+
+    _HELP_SECTIONS = {
+        "help_main": (
+            "📚 *Основные команды:*\n\n"
+            "/start \\- Запуск бота\n"
+            "/help \\- Справка \\(это меню\\)\n"
+            "/info \\- Информация о пользователе\n"
+            "/clear \\- Очистить чат"
+        ),
+        "help_admin": (
+            "🔧 *Система и информация:*\n\n"
+            "/info \\- Информация о пользователе\n"
+            "/ver \\- Версия\n"
+            "/api \\- API ключ \\(маска\\)\n"
+            "/gen\\_api\\_key \\- Сгенерировать API ключ\n"
+            "/del\\_api\\_key \\- Удалить API ключ\n"
+            "/encryption\\_key \\- Ключ шифрования \\(маска\\)\n"
+            "/gen\\_encryption\\_key \\- Сгенерировать ключ\n"
+            "/del\\_encryption\\_key \\- Удалить ключ\n"
+            "/gen\\_chacha\\_key \\- Ключ ChaCha20\n"
+            "/gen\\_pqc\\_key \\- Ключ PQC\n\n"
+            "*👥 Пользователи:*\n"
+            "/list\\_users \\- Список\n"
+            "/setcity \\- Город\n"
+            "/setgreeting \\- Приветствие\n"
+            "/special\\_add \\- Добавить\n"
+            "/special\\_remove \\- Удалить\n\n"
+            "*🤖 ИИ:*\n"
+            "/ai\\_provider \\- Провайдер\n"
+            "/ch\\_model \\- Модель"
+        ),
+        "help_vless": (
+            "🛡️ *VLESS\\-Reality:*\n\n"
+            "/vless\\_status \\- Статус\n"
+            "/vless\\_sync \\- Автонастройка \\+ экспорт\n"
+            "/vless\\_config \\- Конфигурация\n"
+            "/vless\\_gen\\_keys \\- Сгенерировать ключи\n"
+            "/vless\\_reset \\- Сбросить конфиг\n"
+            "/vless\\_set\\_port \\- Порт\n"
+            "/vless\\_on \\| /vless\\_off \\- Вкл/Выкл\n"
+            "/vless\\_test \\- Тест подключения\n"
+            "/vless\\_export \\- Экспорт конфигов\n\n"
+            "*Клиенты:*\n"
+            "/vless\\_add\\_client \\- Добавить\n"
+            "/vless\\_del\\_client \\- Удалить\n"
+            "/vless\\_list\\_clients \\- Список\n"
+            "/vless\\_qr \\- QR клиента\n\n"
+            "*Xray сервер:*\n"
+            "/xray\\_status \\- Статус Xray\n"
+            "/xray\\_config \\- Конфиг сервера"
+        ),
+        "help_hy2": (
+            "⚡ *Hysteria2:*\n\n"
+            "/hy2\\_status \\- Статус\n"
+            "/hy2\\_config \\- Конфигурация\n"
+            "/hy2\\_on \\| /hy2\\_off \\- Вкл/Выкл\n\n"
+            "*Настройки:*\n"
+            "/hy2\\_set\\_server \\- IP сервера\n"
+            "/hy2\\_set\\_port \\- Порт\n"
+            "/hy2\\_set\\_password \\- Пароль\n"
+            "/hy2\\_set\\_obfs \\- Обфускация\n"
+            "/hy2\\_set\\_speed \\- Скорость\n"
+            "/hy2\\_set\\_masquerade \\- Masquerade URL\n\n"
+            "*Генерация:*\n"
+            "/hy2\\_gen\\_password \\- Пароль\n"
+            "/hy2\\_gen\\_cert \\- TLS сертификат\n"
+            "/hy2\\_gen\\_all \\- Всё сразу\n\n"
+            "*Клиенты:*\n"
+            "/hy2\\_add\\_client \\- Добавить\n"
+            "/hy2\\_del\\_client \\- Удалить\n"
+            "/hy2\\_list\\_clients \\- Список\n"
+            "/hy2\\_qr \\- QR клиента\n\n"
+            "*Сервис:*\n"
+            "/hy2\\_install \\- Установить\n"
+            "/hy2\\_apply \\- Применить конфиг\n"
+            "/hy2\\_start \\| /hy2\\_stop \\| /hy2\\_restart\n"
+            "/hy2\\_logs \\- Логи\n"
+            "/hy2\\_export \\- Экспорт"
+        ),
+        "help_tuic": (
+            "🔷 *TUIC:*\n\n"
+            "/tuic\\_status \\- Статус\n"
+            "/tuic\\_config \\- Конфигурация\n"
+            "/tuic\\_on \\| /tuic\\_off \\- Вкл/Выкл\n\n"
+            "*Настройки:*\n"
+            "/tuic\\_set\\_server \\- IP сервера\n"
+            "/tuic\\_set\\_port \\- Порт\n"
+            "/tuic\\_set\\_cc \\- Congestion \\(bbr/cubic\\)\n\n"
+            "*Генерация:*\n"
+            "/tuic\\_gen\\_cert \\- TLS сертификат\n"
+            "/tuic\\_gen\\_all \\- Всё \\(IP\\+cert\\+клиент\\)\n\n"
+            "*Клиенты:*\n"
+            "/tuic\\_add \\- Добавить\n"
+            "/tuic\\_del \\- Удалить\n"
+            "/tuic\\_list \\- Список\n"
+            "/tuic\\_qr \\- QR клиента\n\n"
+            "*Сервис:*\n"
+            "/tuic\\_apply \\- Применить конфиг\n"
+            "/tuic\\_start \\| /tuic\\_stop \\| /tuic\\_restart\n"
+            "/tuic\\_logs \\- Логи\n"
+            "/tuic\\_export \\- Экспорт"
+        ),
+        "help_anytls": (
+            "🔶 *AnyTLS:*\n\n"
+            "/anytls\\_status \\- Статус\n"
+            "/anytls\\_config \\- Конфигурация\n"
+            "/anytls\\_on \\| /anytls\\_off \\- Вкл/Выкл\n\n"
+            "*Настройки:*\n"
+            "/anytls\\_set\\_server \\- IP сервера\n"
+            "/anytls\\_set\\_port \\- Порт\n\n"
+            "*Генерация:*\n"
+            "/anytls\\_gen\\_cert \\- TLS сертификат\n"
+            "/anytls\\_gen\\_all \\- Всё \\(IP\\+cert\\+клиент\\)\n\n"
+            "*Клиенты:*\n"
+            "/anytls\\_add \\- Добавить\n"
+            "/anytls\\_del \\- Удалить\n"
+            "/anytls\\_list \\- Список\n"
+            "/anytls\\_qr \\- QR клиента\n\n"
+            "*Сервис:*\n"
+            "/anytls\\_apply \\- Применить конфиг\n"
+            "/anytls\\_start \\| /anytls\\_stop \\| /anytls\\_restart\n"
+            "/anytls\\_logs \\- Логи\n"
+            "/anytls\\_export \\- Экспорт"
+        ),
+        "help_xhttp": (
+            "🌐 *XHTTP \\(VLESS\\+XHTTP\\):*\n\n"
+            "/xhttp\\_status \\- Статус\n"
+            "/xhttp\\_config \\- Конфигурация\n"
+            "/xhttp\\_on \\| /xhttp\\_off \\- Вкл/Выкл\n\n"
+            "*Настройки:*\n"
+            "/xhttp\\_set\\_server \\- IP сервера\n"
+            "/xhttp\\_set\\_port \\- Порт\n"
+            "/xhttp\\_set\\_path \\- Path\n"
+            "/xhttp\\_set\\_host \\- Host\n"
+            "/xhttp\\_set\\_mode \\- Mode \\(auto/packet\\-up/stream\\-up\\)\n\n"
+            "*Генерация:*\n"
+            "/xhttp\\_gen\\_cert \\- TLS сертификат\n"
+            "/xhttp\\_gen\\_all \\- Всё \\(IP\\+cert\\+клиент\\)\n\n"
+            "*Клиенты:*\n"
+            "/xhttp\\_add \\- Добавить\n"
+            "/xhttp\\_del \\- Удалить\n"
+            "/xhttp\\_list \\- Список\n"
+            "/xhttp\\_qr \\- QR клиента\n\n"
+            "*Сервис:*\n"
+            "/xhttp\\_apply \\- Применить конфиг\n"
+            "/xhttp\\_start \\| /xhttp\\_stop \\| /xhttp\\_restart\n"
+            "/xhttp\\_logs \\- Логи\n"
+            "/xhttp\\_export \\- Экспорт"
+        ),
+        "help_naive": (
+            "🌐 *NaiveProxy:*\n\n"
+            "/naive\\_status \\- Статус\n"
+            "/naive\\_config \\- Конфигурация\n"
+            "/naive\\_on \\| /naive\\_off \\- Вкл/Выкл\n\n"
+            "*Настройки:*\n"
+            "/naive\\_set\\_domain \\- Домен\n"
+            "/naive\\_set\\_port \\- Порт\n"
+            "/naive\\_set\\_user \\- Пользователь\n"
+            "/naive\\_set\\_password \\- Пароль\n"
+            "/naive\\_gen\\_creds \\- Сгенерировать user/password\n\n"
+            "*Сервис:*\n"
+            "/naive\\_install \\- Установить\n"
+            "/naive\\_uri \\- URI клиента\n"
+            "/naive\\_apply \\- Caddyfile \\+ перезапуск\n"
+            "/naive\\_export \\- Экспорт"
+        ),
+        "help_mt": (
+            "📡 *MTProto Proxy:*\n\n"
+            "/mt\\_status \\- Статус\n"
+            "/mt\\_config \\- Конфигурация\n"
+            "/mt\\_on \\| /mt\\_off \\- Вкл/Выкл\n\n"
+            "*Настройки:*\n"
+            "/mt\\_set\\_mode \\- Режим dd/ee\n"
+            "/mt\\_set\\_server \\- IP сервера\n"
+            "/mt\\_set\\_port \\- Порт\n"
+            "/mt\\_set\\_domain \\- Fake\\-TLS домен\n"
+            "/mt\\_set\\_tag \\- Тег\n"
+            "/mt\\_set\\_workers \\- Воркеры\n\n"
+            "*Генерация:*\n"
+            "/mt\\_gen\\_secret \\- Секрет\n"
+            "/mt\\_gen\\_all \\- Всё\n\n"
+            "*Клиенты:*\n"
+            "/mt\\_add\\_client \\- Добавить\n"
+            "/mt\\_del\\_client \\- Удалить\n"
+            "/mt\\_list\\_clients \\- Список\n"
+            "/mt\\_qr \\- QR клиента\n\n"
+            "*Сервис:*\n"
+            "/mt\\_install \\- Установить\n"
+            "/mt\\_apply \\- Применить конфиг\n"
+            "/mt\\_start \\| /mt\\_stop \\| /mt\\_restart\n"
+            "/mt\\_logs \\- Логи\n"
+            "/mt\\_fetch\\_config \\- Обновить secret\n"
+            "/mt\\_export \\- Экспорт"
+        ),
+        "help_tgcapsule": (
+            "🧭 *TelegramOnly Export:*\n\n"
+            "/tgcapsule\\_export \\- Профили Telegram\\-only\n"
+            "для ApiXgRPC, sing\\-box и Clash Meta\n\n"
+            "Используют Reality / Hysteria2 / TUIC /\n"
+            "AnyTLS / XHTTP как транспорт,\n"
+            "маршрутизируя только Telegram\\-домены\\."
+        ),
+    }
+
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /help - справка по командам."""
+        """Обработка команды /help — главное меню справки с inline-кнопками по протоколам."""
         try:
             user = update.effective_user
             logger.info(f"User {user.id} requested help")
-            
-            help_text = """📚 *Доступные команды:*
 
-*Основные:*
-/start \\- Запуск бота и приветствие
-/help \\- Эта справка
-/info \\- Информация о пользователе
-/clear \\- Очистить чат"""
-            
-            # Добавляем админские команды если пользователь - админ
-            if self._is_admin(user.id):
-                help_text += """
+            version_info = get_app_version()
+            ver = self._escape_md2(version_info.get("version", "N/A"))
+            app_name = self._escape_md2(version_info.get("name", "TelegramOnly"))
 
-*🔧 Система и информация \\(админ\\):*
-/ver \\- Информация о версии
-/api \\- Показать маскированный API ключ
-/gen\\_api\\_key \\- Сгенерировать API ключ
-/del\\_api\\_key \\- Удалить API ключ
-/encryption\\_key \\- Показать маскированный ключ шифрования
-/gen\\_encryption\\_key \\- Сгенерировать ключ шифрования
-/del\\_encryption\\_key \\- Удалить ключ шифрования
-/gen\\_chacha\\_key \\- Сгенерировать ключ ChaCha20
-/gen\\_pqc\\_key \\- Сгенерировать ключ PQC
-
-*👥 Управление пользователями \\(админ\\):*
-/list\\_users \\- Список пользователей
-/setcity \\- Установить город пользователю
-/setgreeting \\- Установить приветствие
-/special\\_add \\- Добавить особого пользователя
-/special\\_remove \\- Удалить особого пользователя
-
-*🤖 Настройки ИИ \\(админ\\):*
-/ai\\_provider \\- Выбрать провайдера ИИ
-/ch\\_model \\- Переключить AI модель
-
-*🛡️ VLESS\\-Reality \\(админ\\):*
-/vless\\_status \\- Статус VLESS\\-Reality
-/vless\\_sync \\- ⭐ Автонастройка \\+ экспорт для ApiXgRPC
-/vless\\_gen\\_keys \\- Сгенерировать ключи
-/vless\\_reset \\- Сбросить конфигурацию
-/vless\\_config \\- Показать конфигурацию
-/vless\\_set\\_port \\- Установить порт
-/vless\\_add\\_client \\- Добавить клиента
-/vless\\_qr \\- Показать QR клиента
-/vless\\_list\\_clients \\- Список клиентов
-/vless\\_del\\_client \\- Удалить клиента
-/vless\\_on \\- Включить VLESS\\-Reality
-/vless\\_off \\- Выключить VLESS\\-Reality
-/vless\\_export \\- Экспорт конфигураций и подписок
-/vless\\_test \\- Тест подключения
-
-*📦 Xray сервер \\(через SSH\\):*
-/xray\\_status \\- Проверить статус Xray
-/xray\\_config \\- Показать конфиг на сервере
-
-_SSH команды:_
-`systemctl restart xray` \\- перезапустить
-`journalctl \\-u xray \\-n 50` \\- логи
-
-*⚡ Hysteria2 \\(админ\\):*
-/hy2\\_status \\- Статус Hysteria2
-/hy2\\_config \\- Показать конфигурацию
-/hy2\\_on \\- Включить Hysteria2
-/hy2\\_off \\- Выключить Hysteria2
-/hy2\\_set\\_server \\- Установить IP сервера
-/hy2\\_set\\_port \\- Установить порт
-/hy2\\_set\\_password \\- Установить пароль
-/hy2\\_set\\_obfs \\- Обфускация \\(salamander\\)
-/hy2\\_set\\_speed \\- Скорость \\(up/down Mbps\\)
-/hy2\\_set\\_masquerade \\- URL маскировки
-/hy2\\_gen\\_password \\- Сгенерировать пароль
-/hy2\\_gen\\_cert \\- Сгенерировать TLS сертификат
-/hy2\\_gen\\_all \\- Сгенерировать всё
-/hy2\\_add\\_client \\- Добавить клиента
-/hy2\\_qr \\- Показать QR клиента
-/hy2\\_del\\_client \\- Удалить клиента
-/hy2\\_list\\_clients \\- Список клиентов
-/hy2\\_install \\- Установить Hysteria2 на сервер
-/hy2\\_apply \\- Применить конфиг
-/hy2\\_start \\- Запустить сервис
-/hy2\\_stop \\- Остановить сервис
-/hy2\\_restart \\- Перезапустить сервис
-/hy2\\_logs \\- Логи сервиса
-/hy2\\_export \\- Экспорт конфигов и URI
-
-*🌐 NaiveProxy \\(админ\\):*
-/naive\\_status \\- Статус NaiveProxy
-/naive\\_config \\- Показать конфигурацию
-/naive\\_on \\- Включить NaiveProxy
-/naive\\_off \\- Выключить NaiveProxy
-/naive\\_set\\_domain \\- Установить домен
-/naive\\_set\\_port \\- Установить порт
-/naive\\_set\\_user \\- Установить пользователя
-/naive\\_set\\_password \\- Установить пароль
-/naive\\_gen\\_creds \\- Сгенерировать user/password
-/naive\\_install \\- Установить NaiveProxy на сервер
-/naive\\_uri \\- Показать клиентский URI
-/naive\\_apply \\- Записать Caddyfile и перезапустить сервис
-/naive\\_export \\- Экспорт client json и ApiNgRPC profile
-
-*📡 MTProto Proxy \\(админ\\):*
-/mt\\_status \\- Статус MTProto proxy
-/mt\\_config \\- Показать конфигурацию
-/mt\\_on \\- Включить MTProto proxy
-/mt\\_off \\- Выключить MTProto proxy
-/mt\\_set\\_mode \\- Переключить режим dd/ee
-/mt\\_set\\_server \\- Установить IP сервера
-/mt\\_set\\_port \\- Установить порт
-/mt\\_set\\_domain \\- Установить fake\\-TLS домен
-/mt\\_set\\_tag \\- Статистический тег
-/mt\\_set\\_workers \\- Число воркеров
-/mt\\_gen\\_secret \\- Сгенерировать секрет
-/mt\\_gen\\_all \\- Сгенерировать всё
-/mt\\_add\\_client \\- Добавить клиента
-/mt\\_qr \\- Показать QR клиента
-/mt\\_del\\_client \\- Удалить клиента
-/mt\\_list\\_clients \\- Список клиентов
-/mt\\_install \\- Установить MTProto proxy
-/mt\\_apply \\- Применить конфиг
-/mt\\_start \\- Запустить сервис
-/mt\\_stop \\- Остановить сервис
-/mt\\_restart \\- Перезапустить сервис
-/mt\\_logs \\- Логи сервиса
-/mt\\_fetch\\_config \\- Обновить proxy\\-secret
-/mt\\_export \\- Экспорт ссылок
-
-*🧭 TelegramOnly \\(админ\\):*
-/tgcapsule\\_export \\- Telegram\\-only профили для ApiXgRPC, sing\\-box и Clash"""
-            
-            await update.message.reply_text(
-                help_text,
-                parse_mode=ParseMode.MARKDOWN_V2
+            base_commands = (
+                "/start \\- Запуск бота\n"
+                "/help \\- Справка\n"
+                "/ver \\- Версия бота\n"
+                "/clear \\- Очистить чат"
             )
-            
+
+            if self._is_admin(user.id):
+                text = (
+                    f"📚 *{app_name}* v{ver} — выберите раздел:\n\n"
+                    f"{base_commands}"
+                )
+                keyboard = [
+                    [
+                        InlineKeyboardButton("🔧 Система", callback_data="help_admin"),
+                    ],
+                    [
+                        InlineKeyboardButton("🛡️ VLESS", callback_data="help_vless"),
+                        InlineKeyboardButton("⚡ Hysteria2", callback_data="help_hy2"),
+                    ],
+                    [
+                        InlineKeyboardButton("🔷 TUIC", callback_data="help_tuic"),
+                        InlineKeyboardButton("🔶 AnyTLS", callback_data="help_anytls"),
+                    ],
+                    [
+                        InlineKeyboardButton("🌐 XHTTP", callback_data="help_xhttp"),
+                        InlineKeyboardButton("🌐 NaiveProxy", callback_data="help_naive"),
+                    ],
+                    [
+                        InlineKeyboardButton("📡 MTProto", callback_data="help_mt"),
+                        InlineKeyboardButton("🧭 TG-Only", callback_data="help_tgcapsule"),
+                    ],
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+            else:
+                text = (
+                    f"📚 *{app_name}* v{ver}\n\n"
+                    f"*Доступные команды:*\n"
+                    f"{base_commands}\n\n"
+                    "🔒 _Управление протоколами и настройки сервера доступны только администратору\\._"
+                )
+                reply_markup = None
+
+            await update.message.reply_text(
+                text,
+                parse_mode=ParseMode.MARKDOWN_V2,
+                reply_markup=reply_markup,
+            )
+
         except Exception as e:
             logger.error(f"Error in help_command: {e}")
-            await update.message.reply_text(
-                "Ошибка при отображении справки."
-            )
+            await update.message.reply_text("Ошибка при отображении справки.")
     
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /info - информация о пользователе."""
+        """Обработка команды /info - информация о пользователе (только админ)."""
         try:
             user = update.effective_user
+            if not self._is_admin(user.id):
+                await update.message.reply_text("⛔ Эта команда доступна только администратору.")
+                return
+
             chat = update.effective_chat
-            
-            logger.info(f"User {user.id} requested info")
-            
+            logger.info(f"Admin {user.id} requested info")
+
             info_message = format_user_info(user, chat)
-            
+
             await update.message.reply_text(
                 info_message,
                 parse_mode=ParseMode.MARKDOWN_V2
             )
-            
+
         except Exception as e:
             logger.error(f"Error in info_command: {e}")
             await update.message.reply_text(
@@ -470,34 +676,34 @@ _SSH команды:_
     # === АДМИНСКИЕ КОМАНДЫ - СИСТЕМА И ИНФОРМАЦИЯ ===
     
     async def version_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /ver - информация о версии приложения."""
+        """Команда /ver - информация о версии приложения (доступна всем)."""
         try:
             user = update.effective_user
-            if not self._is_admin(user.id):
-                await update.message.reply_text("⛔ Эта команда доступна только администратору.")
-                return
-            
-            logger.info(f"Admin {user.id} requested version info")
-            
+            logger.info(f"User {user.id} requested version info")
+
             version_info = get_app_version()
-            vless_status = vless_manager.get_vless_status()
-            
-            version_message = f"""📋 *Информация о версии приложения*
+
+            version_message = f"""📋 *Информация о версии*
 
 🔖 Версия: `{version_info.get('version', 'N/A')}`
 📦 Название: {version_info.get('name', 'TelegramOnly')}
-📝 Описание: {version_info.get('description', 'N/A')}
+📝 Описание: {version_info.get('description', 'N/A')}"""
+
+            # Админ видит расширенную информацию
+            if self._is_admin(user.id):
+                vless_status = vless_manager.get_vless_status()
+                version_message += f"""
 
 🛡️ *VLESS\\-Reality:*
 Статус: {"🟢 Включён" if vless_status["enabled"] else "🔴 Выключен"}
 Сконфигурирован: {"✅ Да" if vless_status["configured"] else "❌ Нет"}
 Сервер: `{vless_status.get("server") or "не настроен"}`"""
-            
+
             await update.message.reply_text(
                 version_message,
                 parse_mode=ParseMode.MARKDOWN_V2
             )
-            
+
         except Exception as e:
             logger.error(f"Error in version_command: {e}")
             await update.message.reply_text("Ошибка при получении информации о версии.")
@@ -1985,7 +2191,55 @@ _Обновлено: {updated_at}_"""
         await query.answer()
         
         data = query.data
-        
+
+        # === Help section callbacks ===
+        if data.startswith("help_"):
+            section_text = self._HELP_SECTIONS.get(data)
+            if section_text:
+                # Add "Back to menu" button
+                back_kb = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("◀️ Назад к меню", callback_data="help_back")]
+                ])
+                await query.message.edit_text(
+                    section_text,
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                    reply_markup=back_kb,
+                )
+                return
+            if data == "help_back":
+                # Re-show the main help menu
+                text = (
+                    "📚 *Справка* — выберите раздел:\n\n"
+                    "/start \\- Запуск бота\n"
+                    "/info \\- Информация\n"
+                    "/clear \\- Очистить чат"
+                )
+                keyboard = [
+                    [InlineKeyboardButton("🔧 Система", callback_data="help_admin")],
+                    [
+                        InlineKeyboardButton("🛡️ VLESS", callback_data="help_vless"),
+                        InlineKeyboardButton("⚡ Hysteria2", callback_data="help_hy2"),
+                    ],
+                    [
+                        InlineKeyboardButton("🔷 TUIC", callback_data="help_tuic"),
+                        InlineKeyboardButton("🔶 AnyTLS", callback_data="help_anytls"),
+                    ],
+                    [
+                        InlineKeyboardButton("🌐 XHTTP", callback_data="help_xhttp"),
+                        InlineKeyboardButton("🌐 NaiveProxy", callback_data="help_naive"),
+                    ],
+                    [
+                        InlineKeyboardButton("📡 MTProto", callback_data="help_mt"),
+                        InlineKeyboardButton("🧭 TG-Only", callback_data="help_tgcapsule"),
+                    ],
+                ]
+                await query.message.edit_text(
+                    text,
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                )
+                return
+
         # === API Key callbacks ===
         if data.startswith("api_key:"):
             app_id = data.split(":", 1)[1]
@@ -2924,7 +3178,7 @@ systemctl status xray
             name = args[0]
             success, message, client = hysteria2_manager.add_client(name)
             if success and client:
-                uri = hysteria2_manager.generate_hy2_uri(client.get("password"), f"Hysteria2-{name}")
+                uri = hysteria2_manager.generate_hy2_uri(name, client.get("password"), f"Hysteria2-{name}")
                 message += f"\n🔗 URI: `{uri}`"
             await update.message.reply_text(message)
             if success and client:
@@ -3818,10 +4072,857 @@ systemctl status xray
             logger.error(f"Error in naive_export: {e}")
             await update.message.reply_text(f"Ошибка: {e}")
 
+    # =====================================================================
+    # === TUIC COMMANDS ===
+    # =====================================================================
+
+    async def tuic_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /tuic_status — показать статус TUIC."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+
+            status = tuic_manager.get_status()
+            esc = self._escape_md2
+            status_emoji = "🟢" if status["enabled"] else "🔴"
+            config_emoji = "✅" if status["configured"] else "❌"
+
+            message = f"""🔷 *TUIC Статус*
+
+*Состояние:* {status_emoji} {"Включён" if status["enabled"] else "Выключен"}
+*Конфигурация:* {config_emoji} {"Настроена" if status["configured"] else "Не настроена"}
+
+*Параметры:*
+• Сервер: `{esc(status.get("server"))}`
+• Порт: `{esc(status.get("port", 443))}` \\(UDP\\)
+• SNI: `{esc(status.get("sni") or "(авто)")}`
+• Insecure: {"да ⚠️" if status.get("insecure") else "нет ✅"}
+• Congestion: `{esc(status.get("congestion_control", "bbr"))}`
+• UDP relay: `{esc(status.get("udp_relay_mode", "native"))}`
+
+*Клиентов:* {status.get("clients_count", 0)}
+*Обновлено:* {esc(status.get("updated_at", "никогда"))}"""
+
+            await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            logger.error(f"Error in tuic_status: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_on(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = tuic_manager.enable()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_off(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = tuic_manager.disable()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            config = tuic_manager.get_config(include_secrets=False)
+            config_str = json.dumps(config, ensure_ascii=False, indent=2)
+            await update.message.reply_text(f"🔷 Конфигурация TUIC:\n```json\n{config_str}\n```",
+                                           parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_set_server(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            server = args[0] if args else None
+            success, message = tuic_manager.set_server(server)
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_set_port(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /tuic_set_port <порт>")
+                return
+            port = int(args[0])
+            success, message = tuic_manager.set_port(port)
+            await update.message.reply_text(message)
+        except ValueError:
+            await update.message.reply_text("❌ Порт должен быть числом")
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_set_cc(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /tuic_set_cc <bbr|cubic|new_reno>."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /tuic_set_cc <bbr|cubic|new_reno>")
+                return
+            success, message = tuic_manager.set_congestion_control(args[0])
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_gen_cert(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = tuic_manager.generate_self_signed_cert()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_gen_all(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, results, message = tuic_manager.generate_all()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_add_client(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /tuic_add <name>."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /tuic_add <имя>")
+                return
+            name = args[0]
+            success, message, client = tuic_manager.add_client(name)
+            if success and client:
+                uri = tuic_manager.generate_tuic_uri(
+                    client.get("uuid", ""), client.get("password", ""), f"TUIC-{name}")
+                message += f"\n🔗 URI: `{uri}`"
+            await update.message.reply_text(message)
+            if success and client:
+                await self._reply_tuic_qr(update.message, name)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_qr(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /tuic_qr <имя_клиента>")
+                return
+            await self._reply_tuic_qr(update.message, args[0])
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_del_client(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /tuic_del <имя>")
+                return
+            success, message = tuic_manager.remove_client(args[0])
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_list_clients(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            clients = tuic_manager.list_clients()
+            if not clients:
+                await update.message.reply_text("📋 Клиентов TUIC нет")
+                return
+            esc = self._escape_md2
+            lines = ["🔷 *Клиенты TUIC:*\n"]
+            for i, c in enumerate(clients, 1):
+                name = c.get("name", "?")
+                uuid_short = c.get("uuid", "")[:8] + "..."
+                created = c.get("created_at", "")[:10]
+                lines.append(f"{i}\\. `{esc(name)}` — uuid: `{esc(uuid_short)}` \\({esc(created)}\\)")
+            await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_apply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = tuic_manager.apply_config()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = tuic_manager.service_control("start")
+            await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = tuic_manager.service_control("stop")
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = tuic_manager.service_control("restart")
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_logs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            lines_count = int(args[0]) if args else 30
+            success, output = tuic_manager.get_logs(lines_count)
+            await update.message.reply_text(f"📋 Логи TUIC:\n```\n{output}\n```",
+                                           parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def tuic_export(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /tuic_export — экспорт конфигураций."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+
+            singbox_config = tuic_manager.export_singbox_config()
+            server_config = tuic_manager.export_server_config_json()
+
+            await self._reply_export_file(
+                update.message,
+                json.dumps(singbox_config, ensure_ascii=False, indent=2),
+                "tuic-singbox-client.json",
+                "🔷 TUIC sing-box client config",
+            )
+            await self._reply_export_file(
+                update.message,
+                server_config,
+                "tuic-server-config.json",
+                "🔷 TUIC server config (sing-box)",
+            )
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    # =====================================================================
+    # === ANYTLS COMMANDS ===
+    # =====================================================================
+
+    async def anytls_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /anytls_status — показать статус AnyTLS."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+
+            status = anytls_manager.get_status()
+            esc = self._escape_md2
+            status_emoji = "🟢" if status["enabled"] else "🔴"
+            config_emoji = "✅" if status["configured"] else "❌"
+
+            message = f"""🔶 *AnyTLS Статус*
+
+*Состояние:* {status_emoji} {"Включён" if status["enabled"] else "Выключен"}
+*Конфигурация:* {config_emoji} {"Настроена" if status["configured"] else "Не настроена"}
+
+*Параметры:*
+• Сервер: `{esc(status.get("server"))}`
+• Порт: `{esc(status.get("port", 443))}` \\(TCP\\)
+• SNI: `{esc(status.get("sni") or "(авто)")}`
+• Insecure: {"да ⚠️" if status.get("insecure") else "нет ✅"}
+
+*Клиентов:* {status.get("clients_count", 0)}
+*Обновлено:* {esc(status.get("updated_at", "никогда"))}"""
+
+            await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_on(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = anytls_manager.enable()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_off(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = anytls_manager.disable()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            config = anytls_manager.get_config(include_secrets=False)
+            config_str = json.dumps(config, ensure_ascii=False, indent=2)
+            await update.message.reply_text(f"🔶 Конфигурация AnyTLS:\n```json\n{config_str}\n```",
+                                           parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_set_server(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            server = args[0] if args else None
+            success, message = anytls_manager.set_server(server)
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_set_port(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /anytls_set_port <порт>")
+                return
+            port = int(args[0])
+            success, message = anytls_manager.set_port(port)
+            await update.message.reply_text(message)
+        except ValueError:
+            await update.message.reply_text("❌ Порт должен быть числом")
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_gen_cert(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = anytls_manager.generate_self_signed_cert()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_gen_all(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, results, message = anytls_manager.generate_all()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_add_client(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /anytls_add <name>."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /anytls_add <имя>")
+                return
+            name = args[0]
+            success, message, client = anytls_manager.add_client(name)
+            if success and client:
+                uri = anytls_manager.generate_anytls_uri(
+                    client.get("password", ""), f"AnyTLS-{name}")
+                message += f"\n🔗 URI: `{uri}`"
+            await update.message.reply_text(message)
+            if success and client:
+                await self._reply_anytls_qr(update.message, name)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_qr(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /anytls_qr <имя_клиента>")
+                return
+            await self._reply_anytls_qr(update.message, args[0])
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_del_client(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /anytls_del <имя>")
+                return
+            success, message = anytls_manager.remove_client(args[0])
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_list_clients(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            clients = anytls_manager.list_clients()
+            if not clients:
+                await update.message.reply_text("📋 Клиентов AnyTLS нет")
+                return
+            esc = self._escape_md2
+            lines = ["🔶 *Клиенты AnyTLS:*\n"]
+            for i, c in enumerate(clients, 1):
+                name = c.get("name", "?")
+                pw = c.get("password", "")
+                masked = f"{pw[:4]}..." if len(pw) > 4 else "***"
+                created = c.get("created_at", "")[:10]
+                lines.append(f"{i}\\. `{esc(name)}` — пароль: `{esc(masked)}` \\({esc(created)}\\)")
+            await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_apply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = anytls_manager.apply_config()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = anytls_manager.service_control("start")
+            await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = anytls_manager.service_control("stop")
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = anytls_manager.service_control("restart")
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_logs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            lines_count = int(args[0]) if args else 30
+            success, output = anytls_manager.get_logs(lines_count)
+            await update.message.reply_text(f"📋 Логи AnyTLS:\n```\n{output}\n```",
+                                           parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def anytls_export(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+
+            singbox_config = anytls_manager.export_singbox_config()
+            server_config = anytls_manager.export_server_config_json()
+
+            await self._reply_export_file(
+                update.message,
+                json.dumps(singbox_config, ensure_ascii=False, indent=2),
+                "anytls-singbox-client.json",
+                "🔶 AnyTLS sing-box client config",
+            )
+            await self._reply_export_file(
+                update.message,
+                server_config,
+                "anytls-server-config.json",
+                "🔶 AnyTLS server config (sing-box)",
+            )
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    # =====================================================================
+    # === XHTTP COMMANDS ===
+    # =====================================================================
+
+    async def xhttp_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /xhttp_status — показать статус XHTTP."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+
+            status = xhttp_manager.get_status()
+            esc = self._escape_md2
+            status_emoji = "🟢" if status["enabled"] else "🔴"
+            config_emoji = "✅" if status["configured"] else "❌"
+
+            message = f"""🌐 *XHTTP Статус*
+
+*Состояние:* {status_emoji} {"Включён" if status["enabled"] else "Выключен"}
+*Конфигурация:* {config_emoji} {"Настроена" if status["configured"] else "Не настроена"}
+
+*Параметры:*
+• Сервер: `{esc(status.get("server"))}`
+• Порт: `{esc(status.get("port", 443))}` \\(TCP\\)
+• Path: `{esc(status.get("path", "/"))}`
+• Host: `{esc(status.get("host") or "(пусто)")}`
+• Mode: `{esc(status.get("mode", "auto"))}`
+• Security: `{esc(status.get("security", "tls"))}`
+• SNI: `{esc(status.get("sni") or "(авто)")}`
+• Insecure: {"да ⚠️" if status.get("insecure") else "нет ✅"}
+
+*Клиентов:* {status.get("clients_count", 0)}
+*Обновлено:* {esc(status.get("updated_at", "никогда"))}"""
+
+            await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_on(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = xhttp_manager.enable()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_off(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = xhttp_manager.disable()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            config = xhttp_manager.get_config(include_secrets=False)
+            config_str = json.dumps(config, ensure_ascii=False, indent=2)
+            await update.message.reply_text(f"🌐 Конфигурация XHTTP:\n```json\n{config_str}\n```",
+                                           parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_set_server(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            server = args[0] if args else None
+            success, message = xhttp_manager.set_server(server)
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_set_port(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /xhttp_set_port <порт>")
+                return
+            port = int(args[0])
+            success, message = xhttp_manager.set_port(port)
+            await update.message.reply_text(message)
+        except ValueError:
+            await update.message.reply_text("❌ Порт должен быть числом")
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_set_path(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /xhttp_set_path <path>")
+                return
+            success, message = xhttp_manager.set_path(args[0])
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_set_host(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            host = args[0] if args else ""
+            success, message = xhttp_manager.set_host(host)
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_set_mode(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /xhttp_set_mode <auto|packet-up|stream-up>")
+                return
+            success, message = xhttp_manager.set_mode(args[0])
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_gen_cert(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = xhttp_manager.generate_self_signed_cert()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_gen_all(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, results, message = xhttp_manager.generate_all()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_add_client(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /xhttp_add <name>."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /xhttp_add <имя>")
+                return
+            name = args[0]
+            success, message, client = xhttp_manager.add_client(name)
+            if success and client:
+                uri = xhttp_manager.generate_xhttp_uri(
+                    client.get("uuid", ""), f"XHTTP-{name}")
+                message += f"\n🔗 URI: `{uri}`"
+            await update.message.reply_text(message)
+            if success and client:
+                await self._reply_xhttp_qr(update.message, name)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_qr(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /xhttp_qr <имя_клиента>")
+                return
+            await self._reply_xhttp_qr(update.message, args[0])
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_del_client(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args:
+                await update.message.reply_text("Использование: /xhttp_del <имя>")
+                return
+            success, message = xhttp_manager.remove_client(args[0])
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_list_clients(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            clients = xhttp_manager.list_clients()
+            if not clients:
+                await update.message.reply_text("📋 Клиентов XHTTP нет")
+                return
+            esc = self._escape_md2
+            lines = ["🌐 *Клиенты XHTTP:*\n"]
+            for i, c in enumerate(clients, 1):
+                name = c.get("name", "?")
+                uuid_short = c.get("uuid", "")[:8] + "..."
+                created = c.get("created_at", "")[:10]
+                lines.append(f"{i}\\. `{esc(name)}` — uuid: `{esc(uuid_short)}` \\({esc(created)}\\)")
+            await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_apply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = xhttp_manager.apply_config()
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = xhttp_manager.service_control("start")
+            await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = xhttp_manager.service_control("stop")
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            success, message = xhttp_manager.service_control("restart")
+            await update.message.reply_text(message)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_logs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            lines_count = int(args[0]) if args else 30
+            success, output = xhttp_manager.get_logs(lines_count)
+            await update.message.reply_text(f"📋 Логи XHTTP:\n```\n{output}\n```",
+                                           parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def xhttp_export(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+
+            singbox_config = xhttp_manager.export_singbox_config()
+            server_config = xhttp_manager.export_server_config_json()
+
+            await self._reply_export_file(
+                update.message,
+                json.dumps(singbox_config, ensure_ascii=False, indent=2),
+                "xhttp-singbox-client.json",
+                "🌐 XHTTP sing-box client config",
+            )
+            await self._reply_export_file(
+                update.message,
+                server_config,
+                "xhttp-server-config.json",
+                "🌐 XHTTP server config (sing-box)",
+            )
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка: {e}")
+
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка ошибок."""
         logger.error(f"Update {update} caused error {context.error}")
-        
+
         if update and update.effective_message:
             await update.effective_message.reply_text(
                 "❌ Произошла ошибка при обработке команды. Попробуйте позже."

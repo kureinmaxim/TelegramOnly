@@ -329,6 +329,82 @@ class TelegramBotLite:
                 CommandHandler("tgcapsule_export", self.handlers.tgcapsule_export)
             )
 
+            # === TUIC COMMANDS ===
+            tuic_commands = {
+                "tuic_status": self.handlers.tuic_status,
+                "tuic_on": self.handlers.tuic_on,
+                "tuic_off": self.handlers.tuic_off,
+                "tuic_config": self.handlers.tuic_config,
+                "tuic_set_server": self.handlers.tuic_set_server,
+                "tuic_set_port": self.handlers.tuic_set_port,
+                "tuic_set_cc": self.handlers.tuic_set_cc,
+                "tuic_gen_cert": self.handlers.tuic_gen_cert,
+                "tuic_gen_all": self.handlers.tuic_gen_all,
+                "tuic_add": self.handlers.tuic_add_client,
+                "tuic_qr": self.handlers.tuic_qr,
+                "tuic_del": self.handlers.tuic_del_client,
+                "tuic_list": self.handlers.tuic_list_clients,
+                "tuic_apply": self.handlers.tuic_apply,
+                "tuic_start": self.handlers.tuic_start,
+                "tuic_stop": self.handlers.tuic_stop,
+                "tuic_restart": self.handlers.tuic_restart,
+                "tuic_logs": self.handlers.tuic_logs,
+                "tuic_export": self.handlers.tuic_export,
+            }
+            for cmd_name, handler_func in tuic_commands.items():
+                self.application.add_handler(CommandHandler(cmd_name, handler_func))
+
+            # === ANYTLS COMMANDS ===
+            anytls_commands = {
+                "anytls_status": self.handlers.anytls_status,
+                "anytls_on": self.handlers.anytls_on,
+                "anytls_off": self.handlers.anytls_off,
+                "anytls_config": self.handlers.anytls_config,
+                "anytls_set_server": self.handlers.anytls_set_server,
+                "anytls_set_port": self.handlers.anytls_set_port,
+                "anytls_gen_cert": self.handlers.anytls_gen_cert,
+                "anytls_gen_all": self.handlers.anytls_gen_all,
+                "anytls_add": self.handlers.anytls_add_client,
+                "anytls_qr": self.handlers.anytls_qr,
+                "anytls_del": self.handlers.anytls_del_client,
+                "anytls_list": self.handlers.anytls_list_clients,
+                "anytls_apply": self.handlers.anytls_apply,
+                "anytls_start": self.handlers.anytls_start,
+                "anytls_stop": self.handlers.anytls_stop,
+                "anytls_restart": self.handlers.anytls_restart,
+                "anytls_logs": self.handlers.anytls_logs,
+                "anytls_export": self.handlers.anytls_export,
+            }
+            for cmd_name, handler_func in anytls_commands.items():
+                self.application.add_handler(CommandHandler(cmd_name, handler_func))
+
+            # === XHTTP COMMANDS ===
+            xhttp_commands = {
+                "xhttp_status": self.handlers.xhttp_status,
+                "xhttp_on": self.handlers.xhttp_on,
+                "xhttp_off": self.handlers.xhttp_off,
+                "xhttp_config": self.handlers.xhttp_config,
+                "xhttp_set_server": self.handlers.xhttp_set_server,
+                "xhttp_set_port": self.handlers.xhttp_set_port,
+                "xhttp_set_path": self.handlers.xhttp_set_path,
+                "xhttp_set_host": self.handlers.xhttp_set_host,
+                "xhttp_set_mode": self.handlers.xhttp_set_mode,
+                "xhttp_gen_cert": self.handlers.xhttp_gen_cert,
+                "xhttp_gen_all": self.handlers.xhttp_gen_all,
+                "xhttp_add": self.handlers.xhttp_add_client,
+                "xhttp_qr": self.handlers.xhttp_qr,
+                "xhttp_del": self.handlers.xhttp_del_client,
+                "xhttp_list": self.handlers.xhttp_list_clients,
+                "xhttp_apply": self.handlers.xhttp_apply,
+                "xhttp_start": self.handlers.xhttp_start,
+                "xhttp_stop": self.handlers.xhttp_stop,
+                "xhttp_restart": self.handlers.xhttp_restart,
+                "xhttp_logs": self.handlers.xhttp_logs,
+                "xhttp_export": self.handlers.xhttp_export,
+            }
+            for cmd_name, handler_func in xhttp_commands.items():
+                self.application.add_handler(CommandHandler(cmd_name, handler_func))
+
             # === MTPROTO PROXY COMMANDS ===
             mt_commands = {
                 "mt_status": self.handlers.mt_status,
