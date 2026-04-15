@@ -2,11 +2,19 @@
 
 Короткая инструкция для обычного обновления бота на сервере без полного переустановления VPS.
 
+### Путь на сервере (обязательно проверь)
+
+**Правило:** каталог в конце `rsync … ./ root@host:КАТАЛОГ/` и каталог, где выполняется `docker compose up --build`, должны быть **одинаковыми**. Иначе образ соберётся из старой копии кода, а версия в боте не изменится.
+
+**Новые установки и целевая политика (рекомендуется):** на сервере держите проект в **`/opt/TelegramOnly`**, локально — репозиторий **`TelegramOnly`**, чтобы имя каталога на диске совпадало с продуктом. Все новые VPS и миграции со старого дерева ориентируйте на этот путь.
+
+**Уже работающие сервера (legacy TelegramSimple):** если бот и Docker изначально подняты из **`/opt/TelegramSimple`**, продолжайте редеплой **из этого каталога**, пока явно не перенесёте файлы в `/opt/TelegramOnly`. Скрипты `scripts/deploy_to_server.sh`, `scripts/deploy_fresh_vps.sh` и примеры команд ниже сейчас используют **`/opt/TelegramSimple`** — это историческое соглашение; при появлении нового сервера лучше сразу **`/opt/TelegramOnly`**, а скрипты при необходимости поправить под свой путь.
+
 Этот сценарий подходит, если:
 
 - сервер уже настроен
 - Docker и `docker compose` уже работают
-- проект на сервере лежит в `/opt/TelegramOnly`
+- проект на сервере лежит в **`/opt/TelegramSimple`** или **`/opt/TelegramOnly`** (один путь на весь цикл `rsync` + `compose`)
 - SSH-подключение выполняется на `138.124.71.73:22542`
 
 ---
@@ -66,10 +74,12 @@ ssh -p 22542 root@138.124.71.73
 
 ## Шаг 2. Мягко очистить лишние файлы на сервере
 
+Дальше в шагах 2–6 в командах указан **`/opt/TelegramSimple`** (legacy). На **новом** сервере подставьте **`/opt/TelegramOnly`** во всех таких строках.
+
 Выполнять на сервере:
 
 ```bash
-cd /opt/TelegramOnly
+cd /opt/TelegramSimple
 ls -la | cat
 rm -rf .pytest_cache __pycache__ .DS_Store .env.deploy
 ```
@@ -91,7 +101,7 @@ docker container prune -f
 Выполнять на сервере:
 
 ```bash
-ls -ld /opt/TelegramOnly/.env | cat
+ls -ld /opt/TelegramSimple/.env | cat
 ```
 
 Должен быть обычный файл.
@@ -99,7 +109,7 @@ ls -ld /opt/TelegramOnly/.env | cat
 Если вдруг `.env` стал директорией, исправление такое:
 
 ```bash
-cd /opt/TelegramOnly
+cd /opt/TelegramSimple
 docker compose down
 rm -rf .env
 ```
@@ -107,7 +117,7 @@ rm -rf .env
 Потом залей `.env` заново:
 
 ```bash
-scp -P 22542 .env.deploy root@138.124.71.73:/opt/TelegramOnly/.env
+scp -P 22542 .env.deploy root@138.124.71.73:/opt/TelegramSimple/.env
 ```
 
 ---
@@ -119,7 +129,7 @@ scp -P 22542 .env.deploy root@138.124.71.73:/opt/TelegramOnly/.env
 Открой `Git Bash` и выполни **одной строкой**:
 
 ```bash
-cd /c/Project/TelegramOnly && tar --exclude='venv' --exclude='.venv' --exclude='__pycache__' --exclude='.env' --exclude='.env.deploy' --exclude='app_keys.json' --exclude='users.json' --exclude='*.log' --exclude='.git' -czf - . | ssh -p 22542 root@138.124.71.73 "cd /opt/TelegramOnly && tar -xzf -"
+cd /c/Project/TelegramOnly && tar --exclude='venv' --exclude='.venv' --exclude='__pycache__' --exclude='.env' --exclude='.env.deploy' --exclude='app_keys.json' --exclude='users.json' --exclude='*.log' --exclude='.git' -czf - . | ssh -p 22542 root@138.124.71.73 "cd /opt/TelegramSimple && tar -xzf -"
 ```
 
 Важно:
@@ -144,7 +154,7 @@ rsync -avz -e 'ssh -p 22542' \
   --exclude 'users.json' \
   --exclude '*.log' \
   --exclude '.git' \
-  ./ root@138.124.71.73:/opt/TelegramOnly/
+  ./ root@138.124.71.73:/opt/TelegramSimple/
 ```
 
 Важно:
@@ -160,7 +170,8 @@ rsync -avz -e 'ssh -p 22542' \
 Выполнять на сервере:
 
 ```bash
-cd /opt/TelegramOnly
+cd /opt/TelegramSimple
+
 docker compose up -d --build telegram-helper
 docker logs telegram-helper-lite --tail 100 | cat
 ```
@@ -175,7 +186,7 @@ docker logs telegram-helper-lite --tail 100 | cat
 
 ```bash
 ssh -p 22542 root@138.124.71.73
-cd /opt/TelegramOnly
+cd /opt/TelegramSimple
 python3 scripts/mtproto_sync_systemd.py
 systemctl show -p ExecStart mtproto-proxy --no-pager | cat
 ```
@@ -233,7 +244,7 @@ qrcode ok
 На Windows 11 в `Git Bash`:
 
 ```bash
-cd /c/Project/TelegramOnly && tar --exclude='venv' --exclude='.venv' --exclude='__pycache__' --exclude='.env' --exclude='.env.deploy' --exclude='app_keys.json' --exclude='users.json' --exclude='*.log' --exclude='.git' -czf - . | ssh -p 22542 root@138.124.71.73 "cd /opt/TelegramOnly && tar -xzf -"
+cd /c/Project/TelegramOnly && tar --exclude='venv' --exclude='.venv' --exclude='__pycache__' --exclude='.env' --exclude='.env.deploy' --exclude='app_keys.json' --exclude='users.json' --exclude='*.log' --exclude='.git' -czf - . | ssh -p 22542 root@138.124.71.73 "cd /opt/TelegramSimple && tar -xzf -"
 ```
 
 На macOS / Linux:
@@ -245,14 +256,14 @@ rsync -avz -e 'ssh -p 22542' \
   --exclude '.env' --exclude '.env.deploy' \
   --exclude 'app_keys.json' --exclude 'users.json' --exclude '*.log' \
   --exclude '.git' \
-  ./ root@138.124.71.73:/opt/TelegramOnly/
+  ./ root@138.124.71.73:/opt/TelegramSimple/
 ```
 
 На сервере:
 
 ```bash
 ssh -p 22542 root@138.124.71.73
-cd /opt/TelegramOnly
+cd /opt/TelegramSimple
 docker compose up -d --build telegram-helper
 docker logs telegram-helper-lite --tail 100 | cat
 ```
@@ -272,4 +283,4 @@ docker logs telegram-helper-lite --tail 100 | cat
 
 Для обычного обновления кода используй именно этот файл: `REDEPLOY.md`.
 
-Если сервер не сломан, но в `/opt/TelegramOnly` накопились лишние файлы, используй `SERVER_CLEANUP_EXTRA.md`.
+Если сервер не сломан, но в `/opt/TelegramSimple` накопились лишние файлы, используй `SERVER_CLEANUP_EXTRA.md`.

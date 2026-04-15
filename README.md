@@ -83,6 +83,7 @@ Legacy-compatible flow:
 - `schema/apix-profile-v2.schema.json` - profile schema
 - `fixtures/*.apix.json` - reference exports
 - `INSTALL_VPS.md` - deployment guide
+- `REDEPLOY.md` - обновление кода на уже настроенном VPS (Docker); **новые сервера:** `/opt/TelegramOnly` + имя `TelegramOnly`; **legacy:** `/opt/TelegramSimple` — путь в `rsync` и `docker compose` должен быть один и тот же
 - `ARCHITECTURE.md` - project architecture, stack, current features, and roadmap
 - `SECURITY.md` - security policy and reporting guidance
 - `LICENSE` - MIT license for the public repository
