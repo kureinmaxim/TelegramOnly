@@ -42,6 +42,9 @@
 - `vless_config.json`
 - `naiveproxy_config.json`
 - `hysteria2_config.json`
+- `tuic_config.json`
+- `anytls_config.json`
+- `xhttp_config.json`
 - `mtproto_config.json`
 - `headscale_config.json`
 - `bot.log`
@@ -165,6 +168,32 @@ rsync -avz -e 'ssh -p 22542' \
 
 ---
 
+## Шаг 4.1. Проверить, что конфиг-файлы для volumes существуют
+
+Выполнять на сервере:
+
+```bash
+cd /opt/TelegramSimple
+for f in vless_config.json hysteria2_config.json tuic_config.json \
+         anytls_config.json xhttp_config.json mtproto_config.json \
+         headscale_config.json naiveproxy_config.json app_keys.json \
+         users.json bot.log; do
+  [ -f "$f" ] || echo '{}' > "$f"
+done
+```
+
+> **Если `echo` выдаёт `Is a directory`**: значит Docker ранее создал директорию вместо файла (это происходит, если `docker compose up` запускается до создания файла). Решение:
+>
+> ```bash
+> docker compose down
+> rm -rf tuic_config.json anytls_config.json xhttp_config.json  # удалить директории
+> echo '{}' > tuic_config.json
+> echo '{}' > anytls_config.json
+> echo '{}' > xhttp_config.json
+> ```
+
+---
+
 ## Шаг 5. Пересобрать и запустить бота
 
 Выполнять на сервере:
@@ -264,9 +293,17 @@ rsync -avz -e 'ssh -p 22542' \
 ```bash
 ssh -p 22542 root@138.124.71.73
 cd /opt/TelegramSimple
+
+# Убедиться, что volume-файлы существуют (один раз для новых протоколов)
+for f in tuic_config.json anytls_config.json xhttp_config.json; do
+  [ -f "$f" ] || echo '{}' > "$f"
+done
+
 docker compose up -d --build telegram-helper
 docker logs telegram-helper-lite --tail 100 | cat
 ```
+
+Если `echo` выдаёт `Is a directory` — см. шаг 4.1.
 
 Если после такого редеплоя нужно уже работать с MTProto, используй `MTPROTO_CHEATSHEET.md`: обычный редеплой кода и управление host `mtproto-proxy` это разные сценарии.
 
