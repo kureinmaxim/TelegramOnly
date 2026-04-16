@@ -36,6 +36,8 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+from host_utils import host_run as _host_run
+
 _xhttp_lock = threading.Lock()
 
 _XHTTP_CONFIG_PATH = os.getenv("XHTTP_CONFIG_PATH",
@@ -794,7 +796,7 @@ def apply_config(config_path: str = "/etc/xhttp/config.json") -> Tuple[bool, str
             f.flush()
             os.fsync(f.fileno())
 
-        result = subprocess.run(
+        result = _host_run(
             ["systemctl", "restart", "xhttp-server"],
             capture_output=True, text=True, timeout=30,
         )
@@ -814,7 +816,7 @@ def service_control(action: str) -> Tuple[bool, str]:
         return False, f"❌ Неизвестное действие: {action}"
 
     try:
-        result = subprocess.run(
+        result = _host_run(
             ["systemctl", action, "xhttp-server"],
             capture_output=True, text=True, timeout=30,
         )
@@ -838,7 +840,7 @@ def service_control(action: str) -> Tuple[bool, str]:
 
 def get_logs(lines: int = 30) -> Tuple[bool, str]:
     try:
-        result = subprocess.run(
+        result = _host_run(
             ["journalctl", "-u", "xhttp-server", "-n", str(lines), "--no-pager"],
             capture_output=True, text=True, timeout=15,
         )

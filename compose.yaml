@@ -5,6 +5,7 @@ services:
     image: telegram-helper-lite:latest
     build: .
     user: "0:0"
+    pid: host
     env_file:
       - .env
     ports:

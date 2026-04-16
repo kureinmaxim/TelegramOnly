@@ -37,6 +37,8 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+from host_utils import host_run as _host_run
+
 # Thread safety
 _hy2_lock = threading.Lock()
 
@@ -1170,7 +1172,7 @@ def apply_config() -> Tuple[bool, str]:
         logger.info(f"Hysteria2 server config written to {config_path}")
 
         # Restart service
-        result = subprocess.run(
+        result = _host_run(
             ["systemctl", "restart", "hysteria-server"],
             capture_output=True, text=True, timeout=30,
         )
@@ -1197,7 +1199,7 @@ def service_control(action: str) -> Tuple[bool, str]:
         return False, f"❌ Неизвестное действие: {action}"
 
     try:
-        result = subprocess.run(
+        result = _host_run(
             ["systemctl", action, "hysteria-server"],
             capture_output=True, text=True, timeout=30,
         )
@@ -1226,7 +1228,7 @@ def get_logs(lines: int = 30) -> Tuple[bool, str]:
     Получить логи Hysteria2 сервиса.
     """
     try:
-        result = subprocess.run(
+        result = _host_run(
             ["journalctl", "-u", "hysteria-server", "-n", str(lines), "--no-pager"],
             capture_output=True, text=True, timeout=15,
         )
@@ -1248,15 +1250,15 @@ def install_hysteria2() -> Tuple[bool, str]:
     """
     try:
         # Check if already installed
-        check = subprocess.run(["which", "hysteria"], capture_output=True, text=True)
+        check = _host_run(["which", "hysteria"], capture_output=True, text=True)
         if check.returncode == 0:
             # Get version
-            ver = subprocess.run(["hysteria", "version"], capture_output=True, text=True, timeout=10)
+            ver = _host_run(["hysteria", "version"], capture_output=True, text=True, timeout=10)
             version = ver.stdout.strip()[:100] if ver.returncode == 0 else "unknown"
             return True, f"✅ Hysteria2 уже установлен\n📦 Версия: `{version}`"
 
         # Download and run official installer
-        result = subprocess.run(
+        result = _host_run(
             ["bash", "-c", "curl -fsSL https://get.hy2.sh/ | bash"],
             capture_output=True, text=True, timeout=120,
         )

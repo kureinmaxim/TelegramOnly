@@ -36,6 +36,8 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+from host_utils import host_run as _host_run
+
 _tuic_lock = threading.Lock()
 
 _TUIC_CONFIG_PATH = os.getenv("TUIC_CONFIG_PATH",
@@ -803,7 +805,7 @@ def apply_config(config_path: str = "/etc/tuic/config.json") -> Tuple[bool, str]
 
         logger.info(f"TUIC server config written to {config_path}")
 
-        result = subprocess.run(
+        result = _host_run(
             ["systemctl", "restart", "tuic-server"],
             capture_output=True, text=True, timeout=30,
         )
@@ -824,7 +826,7 @@ def service_control(action: str) -> Tuple[bool, str]:
         return False, f"❌ Неизвестное действие: {action}"
 
     try:
-        result = subprocess.run(
+        result = _host_run(
             ["systemctl", action, "tuic-server"],
             capture_output=True, text=True, timeout=30,
         )
@@ -850,7 +852,7 @@ def service_control(action: str) -> Tuple[bool, str]:
 
 def get_logs(lines: int = 30) -> Tuple[bool, str]:
     try:
-        result = subprocess.run(
+        result = _host_run(
             ["journalctl", "-u", "tuic-server", "-n", str(lines), "--no-pager"],
             capture_output=True, text=True, timeout=15,
         )
