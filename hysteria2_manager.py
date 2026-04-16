@@ -498,13 +498,15 @@ def generate_self_signed_cert(
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode == 0:
-            # Save paths to config
+            # Save paths + auto-set SNI to match cert CN
             config = _load_config()
             config["tls_cert_path"] = cert_path
             config["tls_key_path"] = key_path
+            if not config.get("sni"):
+                config["sni"] = domain
             _save_config(config)
-            logger.info(f"Generated TLS cert via openssl: {cert_path}")
-            return True, f"✅ Сертификат сгенерирован (openssl)\n📄 Cert: `{cert_path}`\n🔑 Key: `{key_path}`"
+            logger.info(f"Generated TLS cert via openssl: {cert_path} (SNI={domain})")
+            return True, f"✅ Сертификат сгенерирован (openssl)\n📄 Cert: `{cert_path}`\n🔑 Key: `{key_path}`\n🌐 SNI: `{domain}`"
     except FileNotFoundError:
         logger.debug("openssl not found, trying Python cryptography")
     except Exception as e:
@@ -549,9 +551,11 @@ def generate_self_signed_cert(
         config = _load_config()
         config["tls_cert_path"] = cert_path
         config["tls_key_path"] = key_path
+        if not config.get("sni"):
+            config["sni"] = domain
         _save_config(config)
-        logger.info(f"Generated TLS cert via Python cryptography: {cert_path}")
-        return True, f"✅ Сертификат сгенерирован (Python)\n📄 Cert: `{cert_path}`\n🔑 Key: `{key_path}`"
+        logger.info(f"Generated TLS cert via Python cryptography: {cert_path} (SNI={domain})")
+        return True, f"✅ Сертификат сгенерирован (Python)\n📄 Cert: `{cert_path}`\n🔑 Key: `{key_path}`\n🌐 SNI: `{domain}`"
 
     except ImportError:
         return False, "❌ Не удалось сгенерировать сертификат.\nУстановите openssl или: `pip install cryptography`"
@@ -687,9 +691,8 @@ def generate_hy2_uri(
 
     params = {}
 
-    sni = config.get("sni", "")
-    if sni:
-        params["sni"] = sni
+    sni = config.get("sni", "") or "www.microsoft.com"
+    params["sni"] = sni
 
     if config.get("insecure"):
         params["insecure"] = "1"
@@ -944,9 +947,8 @@ def export_client_config(client_name: Optional[str] = None) -> Dict:
         },
     }
 
-    sni = config.get("sni", "")
-    if sni:
-        client_config["tls"]["sni"] = sni
+    sni = config.get("sni", "") or "www.microsoft.com"
+    client_config["tls"]["sni"] = sni
     if config.get("insecure"):
         client_config["tls"]["insecure"] = True
 
@@ -999,7 +1001,7 @@ def export_singbox_config(client_name: Optional[str] = None) -> Dict:
         "password": password_str,
         "tls": {
             "enabled": True,
-            "server_name": config.get("sni", "") or config.get("server", ""),
+            "server_name": config.get("sni", "") or "www.microsoft.com",
             "insecure": config.get("insecure", False),
         },
     }
@@ -1046,7 +1048,7 @@ def export_clash_meta_config(client_name: Optional[str] = None) -> str:
         )
         if client and client.get("password"):
             password = f"{client_name}:{client['password']}"
-    sni = config.get("sni", "")
+    sni = config.get("sni", "") or "www.microsoft.com"
     insecure = config.get("insecure", False)
     obfs_type = config.get("obfs_type", "")
     obfs_password = config.get("obfs_password", "")

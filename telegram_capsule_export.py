@@ -89,7 +89,7 @@ def export_apix_profile_v2(strategy: str, client_name: Optional[str] = None) -> 
         hy2_export = {
             "enabled": True,
             "password": hy2_cfg.get("password", ""),
-            "sni": hy2_cfg.get("sni", ""),
+            "sni": hy2_cfg.get("sni", "") or "www.microsoft.com",
             "insecure": hy2_cfg.get("insecure", False),
             "up_mbps": hy2_cfg.get("up_mbps", 0),
             "down_mbps": hy2_cfg.get("down_mbps", 0),
@@ -121,7 +121,7 @@ def export_apix_profile_v2(strategy: str, client_name: Optional[str] = None) -> 
             hy2_export = {
                 "enabled": bool(hy2_cfg.get("server") and hy2_cfg.get("password")),
                 "password": hy2_cfg.get("password", ""),
-                "sni": hy2_cfg.get("sni", ""),
+                "sni": hy2_cfg.get("sni", "") or "www.microsoft.com",
                 "insecure": hy2_cfg.get("insecure", False),
                 "up_mbps": hy2_cfg.get("up_mbps", 0),
                 "down_mbps": hy2_cfg.get("down_mbps", 0),
@@ -219,7 +219,7 @@ def export_singbox_config(strategy: str, client_name: Optional[str] = None) -> D
             "password": config.get("password", ""),
             "tls": {
                 "enabled": True,
-                "server_name": config.get("sni", "") or config.get("server", ""),
+                "server_name": config.get("sni", "") or "www.microsoft.com",
                 "insecure": config.get("insecure", False),
             },
         }
@@ -406,7 +406,7 @@ def export_singbox_config_tuic(client_name: Optional[str] = None) -> Dict:
         "udp_relay_mode": config.get("udp_relay_mode", "native"),
         "tls": {
             "enabled": True,
-            "server_name": config.get("sni", "") or config.get("server", ""),
+            "server_name": config.get("sni", "") or "www.microsoft.com",
             "insecure": config.get("insecure", False),
         },
     }
@@ -448,7 +448,7 @@ def export_singbox_config_anytls(client_name: Optional[str] = None) -> Dict:
         "password": config.get("_client_password", ""),
         "tls": {
             "enabled": True,
-            "server_name": config.get("sni", "") or config.get("server", ""),
+            "server_name": config.get("sni", "") or "www.microsoft.com",
             "insecure": config.get("insecure", False),
         },
     }
@@ -503,7 +503,7 @@ def export_singbox_config_xhttp(client_name: Optional[str] = None) -> Dict:
     if security == "tls":
         outbound["tls"] = {
             "enabled": True,
-            "server_name": config.get("sni", "") or config.get("server", ""),
+            "server_name": config.get("sni", "") or "www.microsoft.com",
             "insecure": config.get("insecure", False),
         }
 
