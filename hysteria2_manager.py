@@ -595,6 +595,11 @@ def generate_all() -> Tuple[bool, Dict, str]:
     results["cert_generated"] = success_cert
     messages.append(msg_cert)
 
+    # 4. Self-signed cert → insecure=1 for client URIs
+    if success_cert:
+        set_insecure(True)
+        messages.append("⚠️ insecure=1 (self-signed сертификат)")
+
     overall_success = success and success_cert
     return overall_success, results, "\n".join(messages)
 

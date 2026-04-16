@@ -6,6 +6,7 @@ services:
     build: .
     user: "0:0"
     pid: host
+    privileged: true
     env_file:
       - .env
     ports:
