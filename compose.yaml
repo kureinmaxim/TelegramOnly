@@ -24,6 +24,9 @@ services:
       - /usr/local/etc/xray:/usr/local/etc/xray
       - /etc/caddy-naive:/etc/caddy-naive
       - ./hysteria2_config.json:/app/hysteria2_config.json
+      - ./tuic_config.json:/app/tuic_config.json
+      - ./anytls_config.json:/app/anytls_config.json
+      - ./xhttp_config.json:/app/xhttp_config.json
       - ./mtproto_config.json:/app/mtproto_config.json
       - ./headscale_config.json:/app/headscale_config.json
       - /var/run/docker.sock:/var/run/docker.sock
