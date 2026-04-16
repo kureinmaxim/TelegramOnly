@@ -4,6 +4,7 @@ services:
     container_name: telegram-helper-lite
     image: telegram-helper-lite:latest
     build: .
+    user: "0:0"
     env_file:
       - .env
     ports:
@@ -23,6 +24,7 @@ services:
       - ./naiveproxy_config.json:/app/naiveproxy_config.json
       - /usr/local/etc/xray:/usr/local/etc/xray
       - /etc/caddy-naive:/etc/caddy-naive
+      - /etc/hysteria:/etc/hysteria
       - ./hysteria2_config.json:/app/hysteria2_config.json
       - ./tuic_config.json:/app/tuic_config.json
       - ./anytls_config.json:/app/anytls_config.json
