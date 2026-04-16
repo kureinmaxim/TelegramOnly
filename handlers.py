@@ -2189,8 +2189,13 @@ _Обновлено: {updated_at}_"""
         """Обработка callback queries от inline клавиатур."""
         query = update.callback_query
         await query.answer()
-        
+
         data = query.data
+
+        # Все callback queries доступны только администраторам
+        if not self._is_admin(query.from_user.id):
+            await query.message.reply_text("⛔ Только для администратора.")
+            return
 
         # === Help section callbacks ===
         if data.startswith("help_"):
