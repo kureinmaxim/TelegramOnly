@@ -326,8 +326,51 @@ class BotHandlersLite:
         )
         return True
 
+    _HELP_MENU_KEYBOARD = [
+        [InlineKeyboardButton("🔧 Система", callback_data="help_admin")],
+        [
+            InlineKeyboardButton("🛡️ VLESS", callback_data="help_vless"),
+            InlineKeyboardButton("⚡ Hysteria2", callback_data="help_hy2"),
+        ],
+        [
+            InlineKeyboardButton("🔷 TUIC", callback_data="help_tuic"),
+            InlineKeyboardButton("🔶 AnyTLS", callback_data="help_anytls"),
+        ],
+        [
+            InlineKeyboardButton("🌐 XHTTP", callback_data="help_xhttp"),
+            InlineKeyboardButton("🌐 NaiveProxy", callback_data="help_naive"),
+        ],
+        [
+            InlineKeyboardButton("📡 MTProto", callback_data="help_mt"),
+            InlineKeyboardButton("🧭 TG-Only", callback_data="help_tgcapsule"),
+        ],
+    ]
+
+    async def _help_show_menu(self, message, *, edit: bool = True):
+        """Показать главное меню /help с inline-кнопками.
+
+        Args:
+            message: Telegram message object.
+            edit: если True — edit_text (для callback), иначе reply_text.
+        """
+        version_info = get_app_version()
+        ver = self._escape_md2(version_info.get("version", "N/A"))
+        app_name = self._escape_md2(version_info.get("name", "TelegramOnly"))
+        text = (
+            f"📚 *{app_name}* v{ver} — выберите раздел:\n\n"
+            "/start \\- Запуск бота\n"
+            "/help \\- Справка\n"
+            "/ver \\- Версия бота\n"
+            "/clear \\- Очистить чат"
+        )
+        reply_markup = InlineKeyboardMarkup(self._HELP_MENU_KEYBOARD)
+        if edit:
+            await message.edit_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=reply_markup)
+        else:
+            await message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=reply_markup)
+
     # === БАЗОВЫЕ КОМАНДЫ ===
-    
+
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка команды /start - запуск бота и приветствие."""
         try:
@@ -569,58 +612,22 @@ class BotHandlersLite:
             user = update.effective_user
             logger.info(f"User {user.id} requested help")
 
-            version_info = get_app_version()
-            ver = self._escape_md2(version_info.get("version", "N/A"))
-            app_name = self._escape_md2(version_info.get("name", "TelegramOnly"))
-
-            base_commands = (
-                "/start \\- Запуск бота\n"
-                "/help \\- Справка\n"
-                "/ver \\- Версия бота\n"
-                "/clear \\- Очистить чат"
-            )
-
             if self._is_admin(user.id):
-                text = (
-                    f"📚 *{app_name}* v{ver} — выберите раздел:\n\n"
-                    f"{base_commands}"
-                )
-                keyboard = [
-                    [
-                        InlineKeyboardButton("🔧 Система", callback_data="help_admin"),
-                    ],
-                    [
-                        InlineKeyboardButton("🛡️ VLESS", callback_data="help_vless"),
-                        InlineKeyboardButton("⚡ Hysteria2", callback_data="help_hy2"),
-                    ],
-                    [
-                        InlineKeyboardButton("🔷 TUIC", callback_data="help_tuic"),
-                        InlineKeyboardButton("🔶 AnyTLS", callback_data="help_anytls"),
-                    ],
-                    [
-                        InlineKeyboardButton("🌐 XHTTP", callback_data="help_xhttp"),
-                        InlineKeyboardButton("🌐 NaiveProxy", callback_data="help_naive"),
-                    ],
-                    [
-                        InlineKeyboardButton("📡 MTProto", callback_data="help_mt"),
-                        InlineKeyboardButton("🧭 TG-Only", callback_data="help_tgcapsule"),
-                    ],
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
+                await self._help_show_menu(update.message, edit=False)
             else:
+                version_info = get_app_version()
+                ver = self._escape_md2(version_info.get("version", "N/A"))
+                app_name = self._escape_md2(version_info.get("name", "TelegramOnly"))
                 text = (
                     f"📚 *{app_name}* v{ver}\n\n"
                     f"*Доступные команды:*\n"
-                    f"{base_commands}\n\n"
+                    "/start \\- Запуск бота\n"
+                    "/help \\- Справка\n"
+                    "/ver \\- Версия бота\n"
+                    "/clear \\- Очистить чат\n\n"
                     "🔒 _Управление протоколами и настройки сервера доступны только администратору\\._"
                 )
-                reply_markup = None
-
-            await update.message.reply_text(
-                text,
-                parse_mode=ParseMode.MARKDOWN_V2,
-                reply_markup=reply_markup,
-            )
+                await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
 
         except Exception as e:
             logger.error(f"Error in help_command: {e}")
@@ -2199,50 +2206,32 @@ _Обновлено: {updated_at}_"""
 
         # === Help section callbacks ===
         if data.startswith("help_"):
-            section_text = self._HELP_SECTIONS.get(data)
-            if section_text:
-                # Add "Back to menu" button
-                back_kb = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("◀️ Назад к меню", callback_data="help_back")]
-                ])
-                await query.message.edit_text(
-                    section_text,
-                    parse_mode=ParseMode.MARKDOWN_V2,
-                    reply_markup=back_kb,
-                )
+            try:
+                if data == "help_back":
+                    await self._help_show_menu(query.message)
+                    return
+                section_text = self._HELP_SECTIONS.get(data)
+                if section_text:
+                    back_kb = InlineKeyboardMarkup([
+                        [InlineKeyboardButton("◀️ Назад к меню", callback_data="help_back")]
+                    ])
+                    await query.message.edit_text(
+                        section_text,
+                        parse_mode=ParseMode.MARKDOWN_V2,
+                        reply_markup=back_kb,
+                    )
+                    return
+            except Exception as e:
+                logger.error(f"Error in help callback '{data}': {e}")
+                # Fallback: отправить новым сообщением без MarkdownV2
+                section_text = self._HELP_SECTIONS.get(data, "")
+                if section_text:
+                    plain = section_text.replace("\\", "").replace("*", "").replace("`", "")
+                    back_kb = InlineKeyboardMarkup([
+                        [InlineKeyboardButton("◀️ Назад к меню", callback_data="help_back")]
+                    ])
+                    await query.message.reply_text(plain, reply_markup=back_kb)
                 return
-            if data == "help_back":
-                # Re-show the main help menu
-                text = (
-                    "📚 *Справка* — выберите раздел:\n\n"
-                    "/start \\- Запуск бота\n"
-                    "/info \\- Информация\n"
-                    "/clear \\- Очистить чат"
-                )
-                keyboard = [
-                    [InlineKeyboardButton("🔧 Система", callback_data="help_admin")],
-                    [
-                        InlineKeyboardButton("🛡️ VLESS", callback_data="help_vless"),
-                        InlineKeyboardButton("⚡ Hysteria2", callback_data="help_hy2"),
-                    ],
-                    [
-                        InlineKeyboardButton("🔷 TUIC", callback_data="help_tuic"),
-                        InlineKeyboardButton("🔶 AnyTLS", callback_data="help_anytls"),
-                    ],
-                    [
-                        InlineKeyboardButton("🌐 XHTTP", callback_data="help_xhttp"),
-                        InlineKeyboardButton("🌐 NaiveProxy", callback_data="help_naive"),
-                    ],
-                    [
-                        InlineKeyboardButton("📡 MTProto", callback_data="help_mt"),
-                        InlineKeyboardButton("🧭 TG-Only", callback_data="help_tgcapsule"),
-                    ],
-                ]
-                await query.message.edit_text(
-                    text,
-                    parse_mode=ParseMode.MARKDOWN_V2,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                )
                 return
 
         # === API Key callbacks ===
