@@ -212,6 +212,142 @@ Typical policy fields:
 
 This keeps the server export logic simple and moves routing execution to capable clients.
 
+## End-to-End Architecture with ApiXgRPC
+
+The deployed setup pairs the `TelegramOnly` server with the `ApiXgRPC` desktop
+client on Windows/macOS. `TelegramOnly` owns every server-side component on the
+VPS; `ApiXgRPC` is the universal client that consumes the exported profiles and
+drives the local transport engines.
+
+### Combined Topology
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ VPS (single public IP)                                      │
+│                                                             │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
+│  │ Xray            │  │ Hysteria2       │  │ TUIC /      │  │
+│  │ VLESS-Reality   │  │ :443/udp        │  │ AnyTLS /    │  │
+│  │ :443/tcp        │  │                 │  │ XHTTP       │  │
+│  └────────┬────────┘  └────────┬────────┘  └──────┬──────┘  │
+│           │ fallback            │                 │         │
+│           ▼                     │                 │         │
+│  ┌─────────────────┐            │                 │         │
+│  │ Nginx :8443     │──SNI──► Headscale / HA       │         │
+│  └─────────────────┘                              │         │
+│                                                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
+│  │ Headscale    │  │ MTProto      │  │ TelegramOnly     │   │
+│  │ (Docker)     │  │ :993         │  │ bot + REST API   │   │
+│  └──────────────┘  └──────────────┘  └────────┬─────────┘   │
+│                                               │             │
+│  systemctl (via nsenter from Docker) drives:                │
+│  xray, hysteria-server, tuic-server, xhttp-server,          │
+│  mtproto-proxy, nginx, headscale                            │
+└───────────────────────────▲─────────────────────────────────┘
+                            │ gRPC AdminService / SSH
+┌───────────────────────────┴─────────────────────────────────┐
+│ Client: Windows / macOS + ApiXgRPC                          │
+│                                                             │
+│  ApiXgRPC (Tauri GUI) + apix-cli                            │
+│   ├── gRPC :50054 ─► shared-rs services                     │
+│   ├── sing-box    ─► VLESS / Hysteria2 / TUIC / AnyTLS      │
+│   └── xray        ─► XHTTP                                  │
+│                                                             │
+│  Connection modes:                                          │
+│   TUN    — full system traffic through the selected         │
+│            transport; requires elevation on Windows/macOS   │
+│   SOCKS5 — local proxy + system proxy guard                 │
+│   Auto   — tries TUN first, falls back to SOCKS5            │
+│                                                             │
+│  Mesh Bypass: 100.64.0.0/10 and fd7a:115c:a1e0::/48 are     │
+│  routed direct, so Tailscale/Headscale keeps working while  │
+│  the VPN tunnel is active.                                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Responsibility Split
+
+| Concern | Owned by | Notes |
+|---------|----------|-------|
+| Server-side transport configs (`VLESS-Reality`, `Hysteria2`, `TUIC`, `AnyTLS`, `XHTTP`) | `TelegramOnly` | File-backed JSON configs plus systemd services on the VPS |
+| Client list for each transport (add, remove, rotate secrets) | `TelegramOnly` | Bot commands and REST API |
+| Generating client artifacts (`apix-profile v2`, `sing-box`, `Clash Meta`, URI/QR) | `TelegramOnly` | `telegram_capsule_export.py` and per-protocol managers |
+| Cross-protocol routing on the server (Nginx SNI fallback for port 443) | `TelegramOnly` | `vless_manager.py` + Nginx |
+| Self-hosted mesh (Headscale) | `TelegramOnly` | `headscale_manager.py` over Docker |
+| Telegram MTProto proxy | `TelegramOnly` | `mtproto_manager.py` + host-side install |
+| Local transport engines (`sing-box`, `xray`) on end-user devices | `ApiXgRPC` | Spawned and supervised by `shared-rs` |
+| TUN / SOCKS5 / Auto routing on the client | `ApiXgRPC` | Platform-specific elevation and routing |
+| Mesh Bypass split routing | `ApiXgRPC` | `shared-rs/src/singbox.rs` |
+| Calling server-side admin actions from the client | `ApiXgRPC` | gRPC `AdminService` + `SshService` |
+
+### Operator Flow: New Client for a Transport
+
+The canonical flow for adding a new user and moving their profile into
+`ApiXgRPC` (shown here for Hysteria2; `VLESS`, `TUIC`, `AnyTLS`, `XHTTP` follow
+the same shape):
+
+1. In the bot: `/hy2_add_client <name>` — writes the client entry to
+   `hysteria2_config.json`. At this stage the running `hysteria-server` does
+   not yet know the new credential.
+2. In the bot: `/hy2_apply` — regenerates `/etc/hysteria/config.yaml` from
+   `hysteria2_config.json` and runs `systemctl restart hysteria-server`. Only
+   after this step the server accepts the new client.
+3. In the bot: `/hy2_export` for a single-client artifact, or
+   `/tgcapsule_export` for the policy-aware `apix-profile v2` bundle.
+4. In `ApiXgRPC`: import the JSON into `Profiles`, confirm `server`, `port`,
+   `password`, and `insecure` match the server (self-signed TLS implies
+   `insecure = true`).
+5. In `ApiXgRPC`: select the profile, choose `TUN` or `Auto`, connect.
+6. On the VPS: `journalctl -u hysteria-server -f` should show
+   `client connected {"addr": "<client_ip>:<port>", "id": "<name>"}`.
+
+The same `<manager>_apply` / `<service>_restart` step exists for every other
+transport (Xray for VLESS, `tuic-server`, `xhttp-server`, `nginx`, etc.). The
+common rule: editing a client list in JSON is not enough — the matching server
+process must be restarted through the corresponding `apply` command.
+
+### Control Channels from ApiXgRPC
+
+The `ApiXgRPC` client does not require an operator to open Telegram for
+routine server operations. Two gRPC services expose the same surface:
+
+- `AdminService` (`apix-cli admin run <command>`): forwards admin-grade
+  commands (`/hy2_apply`, `/nginx_status`, `/headscale_gen`, `/mt_start`,
+  etc.) to the `TelegramOnly` bot/API. Encrypted payload with HMAC and
+  timestamp/nonce checks.
+- `SshService` (`apix-cli ssh run host=... user=... <command>`): direct
+  shell access to the VPS, useful for lower-level debugging (`systemctl
+  status`, `ss -ulpn`, `journalctl`).
+
+The Telegram UI stays available for convenience, but the same operations are
+reachable from the desktop client and from the REPL CLI, which keeps the
+control plane uniform regardless of where the operator is working from.
+
+### Typical Failure Localization
+
+When the client reports "cannot connect", the split of responsibilities lets
+the operator localize the issue quickly:
+
+1. Server process: `systemctl status <service>`, `ss -ulpn | grep <port>`.
+2. Server firewall: `ufw status verbose` plus any hosting-provider security
+   group for TCP/UDP on the relevant port.
+3. Server-side client list synchronization: verify that the latest
+   `<transport>_apply` ran after the last `add_client`.
+4. Client profile integrity: `server`, `port`, credential, SNI, `insecure`
+   must match the server; `apix-profile v2` import covers all of this in one
+   step.
+5. Network path: compare home Wi-Fi vs mobile tethering; for QUIC-based
+   transports (`Hysteria2`, `TUIC`) this separates ISP-level UDP throttling
+   from server or configuration issues.
+6. Local routing: on Windows/macOS, `ApiXgRPC` must run elevated for `TUN`;
+   otherwise the tunnel is established but traffic never enters it
+   (`tx = 0` in server logs, public IP of the client unchanged).
+
+Server logs (`journalctl -u <service> -f`) combined with the client-side
+diagnostics panel in `ApiXgRPC` are usually enough to attribute the failure
+to one of these layers.
+
 ## Configuration and Persistence
 
 The project mostly uses file-backed configuration and secrets:
