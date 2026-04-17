@@ -563,7 +563,8 @@ class BotHandlersLite:
             "/hy2\\_set\\_obfs \\- Обфускация\n"
             "/hy2\\_set\\_speed \\- Скорость\n"
             "/hy2\\_set\\_masquerade \\- Masquerade URL\n"
-            "/hy2\\_set\\_insecure \\- Insecure TLS \\(self\\-signed\\)\n\n"
+            "/hy2\\_set\\_insecure \\- Insecure TLS \\(self\\-signed\\)\n"
+            "/hy2\\_set\\_quic\\_safe \\- Safe QUIC \\(Windows\\-фикс\\)\n\n"
             "*Генерация:*\n"
             "/hy2\\_gen\\_password \\- Пароль\n"
             "/hy2\\_gen\\_cert \\- TLS сертификат\n"
@@ -3329,6 +3330,28 @@ systemctl status xray
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_set_insecure: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
+
+    async def hy2_set_quic_safe(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /hy2_set_quic_safe <1|0> — safe-QUIC defaults (чинит Windows-клиентов)."""
+        try:
+            if not self._is_admin(update.effective_user.id):
+                await update.message.reply_text("⛔ Только для администратора.")
+                return
+            args = context.args or []
+            if not args or args[0] not in ("0", "1"):
+                await update.message.reply_text(
+                    "Использование: /hy2_set_quic_safe 1 | 0\n\n"
+                    "1 — включить safe QUIC-defaults (disablePathMTUDiscovery + receive windows).\n"
+                    "0 — выключить (классический Hysteria2-конфиг).\n\n"
+                    "После смены: /hy2_apply → /hy2_restart"
+                )
+                return
+            enabled = args[0] == "1"
+            success, message = hysteria2_manager.set_quic_safe(enabled)
+            await update.message.reply_text(message)
+        except Exception as e:
+            logger.error(f"Error in hy2_set_quic_safe: {e}")
             await update.message.reply_text(f"Ошибка: {e}")
 
     async def hy2_gen_password(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

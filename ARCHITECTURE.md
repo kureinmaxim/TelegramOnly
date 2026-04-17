@@ -307,6 +307,21 @@ transport (Xray for VLESS, `tuic-server`, `xhttp-server`, `nginx`, etc.). The
 common rule: editing a client list in JSON is not enough — the matching server
 process must be restarted through the corresponding `apply` command.
 
+### Hysteria2: Safe QUIC Defaults for Windows
+
+Windows clients (Sing-Box / ApiXgRPC on Windows) frequently fail to complete the
+QUIC handshake: `tcpdump` on the server shows the client retransmitting 1280-byte
+Initial packets while large downlink UDP packets are silently dropped by the
+Windows stack (NIC offload bugs, path-MTU quirks). iOS and macOS rarely hit this
+because their QUIC stack is more conservative.
+
+To make this work out of the box, the bot's `hysteria2_manager.export_server_config()`
+always emits a `quic:` block (`disablePathMTUDiscovery: true` + shrunk receive
+windows) unless the operator explicitly disables it via `/hy2_set_quic_safe 0`.
+This costs a small amount of peak throughput on clean networks but keeps the
+handshake working on hostile Windows paths. See
+`ApiXgRPC/HYSTERIA2_TROUBLESHOOTING.md` for the full diagnostic flow.
+
 ### Control Channels from ApiXgRPC
 
 The `ApiXgRPC` client does not require an operator to open Telegram for

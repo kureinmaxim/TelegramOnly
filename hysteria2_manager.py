@@ -20,6 +20,16 @@ Hysteria 2 — это высокоскоростной прокси-проток
     "tls_cert_path": "/etc/hysteria/server.crt",
     "tls_key_path": "/etc/hysteria/server.key",
     "masquerade_url": "https://www.microsoft.com",
+    "quic": {
+        "enabled": true,
+        "disable_path_mtu_discovery": true,
+        "init_stream_receive_window": 1048576,
+        "max_stream_receive_window": 8388608,
+        "init_conn_receive_window": 2097152,
+        "max_conn_receive_window": 16777216,
+        "max_idle_timeout": "30s",
+        "keep_alive_period": "10s"
+    },
     "clients": []
 }
 """
@@ -62,6 +72,19 @@ AVAILABLE_MASQUERADE = [
     "https://www.cloudflare.com",
 ]
 
+# Safe QUIC defaults — фиксят handshake на Windows-клиентах (большие UDP-пакеты).
+# Ключи соответствуют полям hysteria-server config (camelCase на выходе).
+QUIC_SAFE_DEFAULTS = {
+    "enabled": True,
+    "disable_path_mtu_discovery": True,
+    "init_stream_receive_window": 1048576,
+    "max_stream_receive_window": 8388608,
+    "init_conn_receive_window": 2097152,
+    "max_conn_receive_window": 16777216,
+    "max_idle_timeout": "30s",
+    "keep_alive_period": "10s",
+}
+
 # Дефолтная конфигурация
 DEFAULT_CONFIG = {
     "enabled": False,
@@ -77,6 +100,7 @@ DEFAULT_CONFIG = {
     "tls_cert_path": "/etc/hysteria/server.crt",
     "tls_key_path": "/etc/hysteria/server.key",
     "masquerade_url": "https://www.microsoft.com",
+    "quic": dict(QUIC_SAFE_DEFAULTS),
     "clients": [],
     "created_at": None,
     "updated_at": None,
@@ -126,6 +150,11 @@ def _load_config() -> Dict:
                 data = json.load(f)
                 config = dict(DEFAULT_CONFIG)
                 config.update(data)
+                # Migrate legacy configs: ensure quic block always has defaults.
+                quic_cfg = dict(QUIC_SAFE_DEFAULTS)
+                if isinstance(config.get("quic"), dict):
+                    quic_cfg.update(config["quic"])
+                config["quic"] = quic_cfg
                 _normalize_clients(config)
                 return config
         except Exception as e:
@@ -231,6 +260,7 @@ def get_status() -> Dict:
         "tls_cert_path": config.get("tls_cert_path", ""),
         "tls_key_path": config.get("tls_key_path", ""),
         "clients_count": len(config.get("clients", [])),
+        "quic_safe": bool((config.get("quic") or {}).get("enabled", False)),
         "updated_at": config.get("updated_at"),
     }
 
@@ -438,6 +468,31 @@ def set_speed(up_mbps: int, down_mbps: int) -> Tuple[bool, str]:
         up_str = f"{up_mbps} Mbps" if up_mbps > 0 else "авто"
         down_str = f"{down_mbps} Mbps" if down_mbps > 0 else "авто"
         return True, f"✅ Скорость: ↑ {up_str} / ↓ {down_str}"
+    return False, "❌ Ошибка при сохранении"
+
+
+def set_quic_safe(enabled: bool) -> Tuple[bool, str]:
+    """
+    Включить/выключить блок `quic:` с safe-defaults в серверном конфиге.
+
+    Блок нужен, когда клиенты на Windows не могут поднять QUIC handshake
+    (ретрансмиты 1280/1280 большими пакетами). Включает
+    `disablePathMTUDiscovery: true` и ограничивает receive-окна.
+
+    После смены нужно вызвать `/hy2_apply` чтобы переписать
+    `/etc/hysteria/config.yaml` и `/hy2_restart`.
+    """
+    config = _load_config()
+    quic_cfg = dict(config.get("quic") or QUIC_SAFE_DEFAULTS)
+    quic_cfg["enabled"] = bool(enabled)
+    config["quic"] = quic_cfg
+
+    if _save_config(config):
+        status = "включены ✅" if enabled else "выключены"
+        return True, (
+            f"✅ Safe QUIC-defaults {status}\n"
+            f"ℹ️ Примените: /hy2_apply → /hy2_restart"
+        )
     return False, "❌ Ошибка при сохранении"
 
 
@@ -676,6 +731,42 @@ def remove_client(name_or_password: str) -> Tuple[bool, str]:
 
 # === Export Configurations ===
 
+def _resolve_auth_identity(
+    config: Dict, client_name: Optional[str]
+) -> Tuple[str, str]:
+    """
+    Подобрать (name, password) для клиентского auth.
+
+    Сервер пишется с `type: userpass`, когда есть хоть один client
+    (а `_normalize_clients` гарантирует `default`). Клиент обязан
+    слать `name:password`. Пустой name возвращаем только для legacy
+    случая, когда clients отсутствуют вовсе.
+    """
+    clients = config.get("clients") or []
+
+    if client_name:
+        client = next(
+            (c for c in clients if c.get("name") == client_name),
+            None,
+        )
+        if client and client.get("password"):
+            return client_name, client["password"]
+
+    # client_name не задан → берём default-клиента (он всегда существует
+    # после _normalize_clients). Это именно тот идентификатор, который
+    # hysteria-server ищет в userpass-мапе.
+    if clients:
+        default_client = next(
+            (c for c in clients if c.get("name") == "default"),
+            None,
+        )
+        if default_client and default_client.get("password"):
+            return "default", default_client["password"]
+
+    # Legacy: clients нет → сервер тоже не в userpass, шлём голый пароль.
+    return "", config.get("password", "")
+
+
 def generate_hy2_uri(
     client_name: Optional[str] = None,
     client_password: Optional[str] = None,
@@ -691,7 +782,13 @@ def generate_hy2_uri(
 
     server = config.get("server", "")
     port = config.get("port", 443)
-    password = client_password or config.get("password", "")
+
+    # Выбор идентификатора: явно заданный client_name/password, иначе default-клиент.
+    if client_password:
+        name_resolved = client_name or "default"
+        password = client_password
+    else:
+        name_resolved, password = _resolve_auth_identity(config, client_name)
 
     if not server or not password:
         return ""
@@ -714,9 +811,9 @@ def generate_hy2_uri(
     query_string = "&".join([f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items()])
     comment_enc = urllib.parse.quote(comment)
 
-    # Userpass: hy2://name:password@...  Single: hy2://password@...
-    if client_name:
-        auth_part = f"{urllib.parse.quote(client_name)}:{urllib.parse.quote(password)}"
+    # Userpass: hy2://name:password@...  Legacy: hy2://password@...
+    if name_resolved:
+        auth_part = f"{urllib.parse.quote(name_resolved)}:{urllib.parse.quote(password)}"
     else:
         auth_part = urllib.parse.quote(password)
 
@@ -892,6 +989,20 @@ def export_server_config() -> Dict:
             },
         }
 
+    # QUIC tuning — лечит QUIC handshake на Windows-клиентах.
+    # См. ApiXgRPC/HYSTERIA2_TROUBLESHOOTING.md §4.4.
+    quic_cfg = config.get("quic") or {}
+    if quic_cfg.get("enabled"):
+        server_config["quic"] = {
+            "disablePathMTUDiscovery": bool(quic_cfg.get("disable_path_mtu_discovery", True)),
+            "initStreamReceiveWindow": int(quic_cfg.get("init_stream_receive_window", 1048576)),
+            "maxStreamReceiveWindow": int(quic_cfg.get("max_stream_receive_window", 8388608)),
+            "initConnReceiveWindow": int(quic_cfg.get("init_conn_receive_window", 2097152)),
+            "maxConnReceiveWindow": int(quic_cfg.get("max_conn_receive_window", 16777216)),
+            "maxIdleTimeout": str(quic_cfg.get("max_idle_timeout", "30s")),
+            "keepAlivePeriod": str(quic_cfg.get("keep_alive_period", "10s")),
+        }
+
     return server_config
 
 
@@ -928,19 +1039,16 @@ def export_client_config(client_name: Optional[str] = None) -> Dict:
     """
     Сгенерировать клиентскую конфигурацию Hysteria2 (native format).
 
-    If client_name is provided and clients exist, uses 'name:password' auth.
+    Server is always in `userpass` mode when clients exist, so auth is emitted
+    as `name:password`. When client_name is None — falls back to `default`.
     """
     config = _load_config()
 
-    # Determine auth string: name:password for userpass, plain password otherwise
-    auth_str = config.get("password", "")
-    if client_name:
-        client = next(
-            (c for c in config.get("clients", []) if c.get("name") == client_name),
-            None,
-        )
-        if client and client.get("password"):
-            auth_str = f"{client_name}:{client['password']}"
+    name_resolved, password = _resolve_auth_identity(config, client_name)
+    if name_resolved:
+        auth_str = f"{name_resolved}:{password}"
+    else:
+        auth_str = password
 
     client_config = {
         "server": f"{config.get('server', '')}:{config.get('port', 443)}",
@@ -986,19 +1094,17 @@ def export_singbox_config(client_name: Optional[str] = None) -> Dict:
     """
     Сгенерировать конфигурацию sing-box (client) с Hysteria2 outbound.
 
-    If client_name is provided, uses 'name:password' in password field.
+    Server is always in `userpass` mode when clients exist, so `password`
+    field is emitted as `name:password`. When client_name is None —
+    falls back to `default`.
     """
     config = _load_config()
 
-    # Determine password: name:password for userpass, plain otherwise
-    password_str = config.get("password", "")
-    if client_name:
-        client = next(
-            (c for c in config.get("clients", []) if c.get("name") == client_name),
-            None,
-        )
-        if client and client.get("password"):
-            password_str = f"{client_name}:{client['password']}"
+    name_resolved, password = _resolve_auth_identity(config, client_name)
+    if name_resolved:
+        password_str = f"{name_resolved}:{password}"
+    else:
+        password_str = password
 
     outbound = {
         "type": "hysteria2",
@@ -1046,15 +1152,10 @@ def export_clash_meta_config(client_name: Optional[str] = None) -> str:
     config = _load_config()
     server = config.get("server", "")
     port = config.get("port", 443)
-    password = config.get("password", "")
 
-    if client_name:
-        client = next(
-            (c for c in config.get("clients", []) if c.get("name") == client_name),
-            None,
-        )
-        if client and client.get("password"):
-            password = f"{client_name}:{client['password']}"
+    name_resolved, raw_password = _resolve_auth_identity(config, client_name)
+    password = f"{name_resolved}:{raw_password}" if name_resolved else raw_password
+
     sni = config.get("sni", "") or "www.microsoft.com"
     insecure = config.get("insecure", False)
     obfs_type = config.get("obfs_type", "")

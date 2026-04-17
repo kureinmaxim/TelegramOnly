@@ -711,6 +711,20 @@ cat /opt/TelegramSimple/naiveproxy_config.json | cat
 /hy2_export      — получить клиентский конфиг
 ```
 
+#### Safe QUIC defaults (Windows-клиенты)
+
+Блок `quic:` с `disablePathMTUDiscovery: true` и урезанными receive-окнами
+включён **по умолчанию**. Он лечит зависший QUIC handshake на Windows (iOS и
+macOS работают и без него, потому что их QUIC-стек консервативнее).
+См. `ApiXgRPC/HYSTERIA2_TROUBLESHOOTING.md` §4.4.
+
+```text
+/hy2_set_quic_safe 1   # safe-defaults (по умолчанию)
+/hy2_set_quic_safe 0   # классический hysteria-server без тюнинга
+/hy2_apply             # переписать /etc/hysteria/config.yaml
+/hy2_restart           # применить
+```
+
 ### MTProto (установка на хосте VPS, не из Docker)
 
 Команда `/mt_install` из бота внутри Docker-контейнера не подходит для реальной установки, потому что MTProto требует:

@@ -288,6 +288,7 @@ class TelegramBotLite:
                 "hy2_set_speed": self.handlers.hy2_set_speed,
                 "hy2_set_masquerade": self.handlers.hy2_set_masquerade,
                 "hy2_set_insecure": self.handlers.hy2_set_insecure,
+                "hy2_set_quic_safe": self.handlers.hy2_set_quic_safe,
                 "hy2_gen_password": self.handlers.hy2_gen_password,
                 "hy2_gen_cert": self.handlers.hy2_gen_cert,
                 "hy2_gen_all": self.handlers.hy2_gen_all,
