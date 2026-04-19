@@ -210,8 +210,10 @@ rsync -avz -e 'ssh -p 22542' \
 ssh -p 22542 root@IP_СЕРВЕРА
 cd /opt/TelegramSimple
 docker compose up -d --build telegram-helper
-docker logs telegram-helper-lite --tail 100
+docker compose logs --tail 100 telegram-helper
 ```
+
+> Если код внутри контейнера остался старым (Docker взял кеш слоёв) — см. [Пересборка без кеша](#пересборка-без-кеша-если-старый-код-застрял).
 
 ### Быстрый сценарий (Windows, Git Bash)
 
@@ -241,9 +243,12 @@ docker compose up -d --build telegram-helper
 
 ### Пересборка без кеша (если старый код застрял)
 
+Признаки: в `docker compose logs telegram-helper` всплывают ошибки из уже исправленных файлов, или `docker exec telegram-helper-lite grep <маркер> /app/<file>` не находит свежий код.
+
 ```bash
 docker compose build --no-cache telegram-helper
 docker compose up -d telegram-helper
+docker compose logs --tail 100 telegram-helper
 ```
 
 ### Очистка Docker (если мало места)
