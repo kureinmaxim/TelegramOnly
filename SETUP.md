@@ -196,6 +196,8 @@ fail2ban-client status sshd
 
 ### Быстрый сценарий (macOS)
 
+Два шага: `rsync` заливает код на хост, `docker compose build` переносит его внутрь контейнера. Один шаг без второго = старый код в контейнере.
+
 ```bash
 # 1. С Mac — залить код
 cd "/Users/olgazaharova/Project/ProjectPython/TelegramOnly"
@@ -206,14 +208,24 @@ rsync -avz -e 'ssh -p 22542' \
   --exclude '.git' \
   ./ root@IP_СЕРВЕРА:/opt/TelegramSimple/
 
-# 2. На сервере — пересобрать и запустить
-ssh -p 22542 root@IP_СЕРВЕРА
-cd /opt/TelegramSimple
-docker compose up -d --build telegram-helper
-docker compose logs --tail 100 telegram-helper
+# 2. На сервере — пересобрать без кеша и запустить
+ssh -p 22542 root@IP_СЕРВЕРА \
+  'cd /opt/TelegramSimple && \
+   docker compose build --no-cache telegram-helper && \
+   docker compose up -d telegram-helper && \
+   docker compose logs --tail 50 telegram-helper'
 ```
 
-> Если код внутри контейнера остался старым (Docker взял кеш слоёв) — см. [Пересборка без кеша](#пересборка-без-кеша-если-старый-код-застрял).
+Почему `--no-cache`: файловые bind-mount'ы (`./storage.py:/app/storage.py` через `COPY . /app`) иногда не инвалидируют кеш слоя, и Docker собирает образ из старой копии. `--no-cache` гарантирует свежий COPY.
+
+Быстрый self-check, что код реально в контейнере:
+
+```bash
+docker exec telegram-helper-lite grep -c EBUSY /app/storage.py
+# ожидаем 2 (или любой свежий маркер из последних правок)
+docker image inspect telegram-helper-lite:latest --format '{{.Created}}'
+# дата должна быть "только что"
+```
 
 ### Быстрый сценарий (Windows, Git Bash)
 
