@@ -6,6 +6,7 @@ import json
 import os
 import tempfile
 import threading
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Tuple, List
 
 # Thread safety for concurrent handler access
@@ -110,6 +111,26 @@ def remove_special_user(user_id: int) -> None:
     if int(user_id) in special:
         special.remove(int(user_id))
         _atomic_write(data)
+
+def track_user(
+    user_id: int,
+    username: Optional[str] = None,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+) -> None:
+    """Record that a user interacted with the bot. Stores identity + last_seen."""
+    data = _load_data()
+    user = data["users"].setdefault(str(user_id), {})
+    if username is not None:
+        user["username"] = username
+    if first_name is not None:
+        user["first_name"] = first_name
+    if last_name is not None:
+        user["last_name"] = last_name
+    user["last_seen"] = datetime.now(timezone.utc).isoformat()
+    user.setdefault("first_seen", user["last_seen"])
+    _atomic_write(data)
+
 
 def list_users() -> Tuple[List[int], Dict[int, Dict[str, Any]]]:
     data = _load_data()

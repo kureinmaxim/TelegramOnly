@@ -1,6 +1,6 @@
 [project]
 name = "telegram-helper"
-version = "3.6.3"
+version = "3.6.4"
 description = "Telegram echo bot with basic commands"
 requires-python = ">=3.11"
 dependencies = [

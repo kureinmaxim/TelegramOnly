@@ -31,6 +31,7 @@ from storage import (
     add_special_user,
     remove_special_user,
     list_users as storage_list_users,
+    track_user as storage_track_user,
 )
 from utils import (
     format_user_info,
@@ -71,6 +72,20 @@ class BotHandlersLite:
         if not self.config:
             return False
         return self.config.is_admin(user_id)
+
+    @staticmethod
+    def _track_user(user) -> None:
+        if user is None:
+            return
+        try:
+            storage_track_user(
+                user.id,
+                username=getattr(user, "username", None),
+                first_name=getattr(user, "first_name", None),
+                last_name=getattr(user, "last_name", None),
+            )
+        except Exception as e:
+            logger.warning(f"track_user failed for {getattr(user, 'id', '?')}: {e}")
 
     def _secret_reveal_allowed(self) -> bool:
         """Разрешён ли полный вывод секретов через удалённые каналы."""
@@ -382,7 +397,8 @@ class BotHandlersLite:
         try:
             user = update.effective_user
             logger.info(f"User {user.id} ({user.username}) started the bot")
-            
+            self._track_user(user)
+
             # Проверяем VLESS статус
             vless_status = vless_manager.get_vless_status()
             vless_indicator = "🟢" if vless_status["enabled"] else "🔴"
@@ -817,6 +833,7 @@ class BotHandlersLite:
         try:
             user = update.effective_user
             logger.info(f"User {user.id} requested help")
+            self._track_user(user)
 
             if self._is_admin(user.id):
                 await self._help_show_menu(update.message, edit=False)
@@ -829,6 +846,7 @@ class BotHandlersLite:
                     f"*Доступные команды:*\n"
                     "/start \\- Запуск бота\n"
                     "/help \\- Справка\n"
+                    "/info \\- Информация о вас\n"
                     "/ver \\- Версия бота\n"
                     "/clear \\- Очистить чат\n\n"
                     "🔒 _Управление протоколами и настройки сервера доступны только администратору\\._"
@@ -845,6 +863,7 @@ class BotHandlersLite:
             user = update.effective_user
             chat = update.effective_chat
             logger.info(f"User {user.id} requested info")
+            self._track_user(user)
 
             info_message = format_user_info(user, chat)
 
@@ -1331,16 +1350,42 @@ class BotHandlersLite:
             return
         
         special, users = storage_list_users()
-        lines = ["*Особые пользователи:*"]
-        lines.append(", ".join([str(x) for x in special]) if special else "\\-")
-        lines.append("\n*Пользователи:*")
-        if users:
-            for uid, prefs in users.items():
-                city = escape_markdown(prefs.get("city", "-"))
-                lines.append(f"`{uid}`: city\\={city}")
+        special_set = set(special)
+
+        def _fmt_user_line(uid: int, prefs: dict) -> str:
+            username = prefs.get("username")
+            first = prefs.get("first_name") or ""
+            last = prefs.get("last_name") or ""
+            name = (first + (" " + last if last else "")).strip()
+            handle = f"@{username}" if username else ""
+            city = prefs.get("city")
+            parts = [f"`{uid}`"]
+            if handle:
+                parts.append(escape_markdown(handle))
+            if name:
+                parts.append(escape_markdown(name))
+            if city:
+                parts.append(f"🏙 {escape_markdown(city)}")
+            if prefs.get("last_seen"):
+                parts.append(f"🕒 {escape_markdown(prefs['last_seen'][:10])}")
+            return " \\- ".join(parts)
+
+        lines = [f"*Особые пользователи* \\({len(special)}\\)*:*"]
+        if special:
+            for uid in special:
+                prefs = users.get(uid, {})
+                lines.append(_fmt_user_line(uid, prefs))
         else:
             lines.append("\\-")
-        
+
+        regular = {uid: p for uid, p in users.items() if uid not in special_set}
+        lines.append(f"\n*Обычные пользователи* \\({len(regular)}\\)*:*")
+        if regular:
+            for uid, prefs in sorted(regular.items(), key=lambda kv: kv[1].get("last_seen", ""), reverse=True):
+                lines.append(_fmt_user_line(uid, prefs))
+        else:
+            lines.append("\\-")
+
         await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2)
     
     # === НАСТРОЙКИ ИИ ===
