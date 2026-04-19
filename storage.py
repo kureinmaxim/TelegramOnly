@@ -2,6 +2,7 @@
 Persistent storage for per-user preferences and special user list.
 """
 
+import errno
 import json
 import os
 import tempfile
@@ -49,17 +50,29 @@ def _atomic_write(data: Dict[str, Any]) -> None:
     with _storage_lock:
         directory = os.path.dirname(_USER_STORE_PATH) or "."
         os.makedirs(directory, exist_ok=True)
+        serialized = json.dumps(data, ensure_ascii=False, indent=2)
         fd, tmp_path = tempfile.mkstemp(prefix="users_", suffix=".json", dir=directory)
+        renamed = False
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
-                json.dump(data, tmp_file, ensure_ascii=False, indent=2)
-            os.replace(tmp_path, _USER_STORE_PATH)
-        finally:
+                tmp_file.write(serialized)
             try:
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
-            except Exception:
-                pass
+                os.replace(tmp_path, _USER_STORE_PATH)
+                renamed = True
+            except OSError as e:
+                # Docker single-file bind mount pins the inode; os.replace
+                # fails with EBUSY. Fall back to in-place truncate+write.
+                if e.errno not in (errno.EBUSY, errno.EXDEV):
+                    raise
+                with open(_USER_STORE_PATH, "w", encoding="utf-8") as f:
+                    f.write(serialized)
+        finally:
+            if not renamed:
+                try:
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+                except Exception:
+                    pass
 
 # --- Public API ---
 
