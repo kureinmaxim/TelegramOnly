@@ -329,6 +329,9 @@ class BotHandlersLite:
     _HELP_MENU_KEYBOARD = [
         [
             InlineKeyboardButton("🔧 Система", callback_data="help_admin"),
+            InlineKeyboardButton("👥 Пользователи", callback_data="help_users"),
+        ],
+        [
             InlineKeyboardButton("🗺 Сервер с нуля", callback_data="help_roadmap"),
         ],
         [
@@ -490,15 +493,19 @@ class BotHandlersLite:
             "/del\\_encryption\\_key \\- Удалить ключ\n"
             "/gen\\_chacha\\_key \\- Ключ ChaCha20\n"
             "/gen\\_pqc\\_key \\- Ключ PQC\n\n"
-            "*👥 Пользователи:*\n"
-            "/list\\_users \\- Список\n"
-            "/setcity \\- Город\n"
-            "/setgreeting \\- Приветствие\n"
-            "/special\\_add \\- Добавить\n"
-            "/special\\_remove \\- Удалить\n\n"
             "*🤖 ИИ:*\n"
             "/ai\\_provider \\- Провайдер\n"
             "/ch\\_model \\- Модель"
+        ),
+        "help_users": (
+            "👥 *Управление пользователями:*\n\n"
+            "/list\\_users \\- Список всех пользователей\n"
+            "/setcity \\<user\\_id\\> \\<city\\> \\- Установить город\n"
+            "/setgreeting \\<user\\_id\\> \\<text\\> \\- Приветствие\n"
+            "/special\\_add \\<user\\_id\\> \\- Добавить особого\n"
+            "/special\\_remove \\<user\\_id\\> \\- Удалить особого\n\n"
+            "💡 `user\\_id` можно узнать через /info\n"
+            "или /list\\_users"
         ),
         "help_vless": (
             "🛡️ *VLESS\\-Reality*\n\n"
@@ -833,17 +840,17 @@ class BotHandlersLite:
             await update.message.reply_text("Ошибка при отображении справки.")
     
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /info - информация о пользователе (только админ)."""
+        """Обработка команды /info - информация о пользователе (доступна всем)."""
         try:
             user = update.effective_user
-            if not self._is_admin(user.id):
-                await update.message.reply_text("⛔ Эта команда доступна только администратору.")
-                return
-
             chat = update.effective_chat
-            logger.info(f"Admin {user.id} requested info")
+            logger.info(f"User {user.id} requested info")
 
             info_message = format_user_info(user, chat)
+
+            # Add role line
+            role = "Admin" if self._is_admin(user.id) else "User"
+            info_message += f"\n👮 *Type:* {role}"
 
             await update.message.reply_text(
                 info_message,

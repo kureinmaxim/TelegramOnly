@@ -124,7 +124,7 @@ source venv/bin/activate && python3 tests/test_api.py
 
 ## Docker on VPS (redeploy)
 
-Routine code updates for an already configured server are in **`REDEPLOY.md`**.
+Routine code updates for an already configured server are in **`SETUP.md`**.
 
 - **New deployments:** use the **`TelegramOnly`** layout on disk, e.g. **`/opt/TelegramOnly`**, and the same path everywhere (`rsync` destination and `cd` before `docker compose`).
 - **Existing legacy servers:** often **`/opt/TelegramSimple`** (same path as in `scripts/deploy_to_server.sh` today). Do not mix paths between copy and compose.

@@ -90,11 +90,9 @@ def format_user_info(user: User, chat: Chat) -> str:
         if chat.title:
             info_parts.append(f"💬 *Chat Title:* {escape_markdown(chat.title)}")
         
-        # Bot information
+        # Bot flag (role is added by the caller)
         if user.is_bot:
             info_parts.append("🤖 *Type:* Bot")
-        else:
-            info_parts.append("👨‍💻 *Type:* User")
         
         # Premium status
         if hasattr(user, 'is_premium') and user.is_premium:

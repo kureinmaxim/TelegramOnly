@@ -422,7 +422,7 @@ Compatibility note:
 
 - primary target: `TelegramOnly` layout and deployment flow
 - **new server directories:** prefer **`/opt/TelegramOnly`** on disk (aligned with the
-  product name); redeploy checklist in `REDEPLOY.md`
+  product name); redeploy checklist in `SETUP.md`
 - transition fallback: read existing `/opt/TelegramSimple` artifacts without forcing an
   immediate migration
 - layout migration and client artifact compatibility are separate concerns; the server
